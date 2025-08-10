@@ -1,3 +1,5 @@
 pynput>=1.7.6
 pywin32>=311
-psutil>=5.9.5 
+psutil>=5.9.5
+Pillow>=10.0.0
+pytesseract>=0.3.10 
