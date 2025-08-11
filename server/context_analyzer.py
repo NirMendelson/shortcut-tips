@@ -16,7 +16,7 @@ class ContextAnalyzer:
         """
         if not menu_text:
             return None
-            
+        
         # Clean up the menu text
         menu_text = menu_text.strip()
         

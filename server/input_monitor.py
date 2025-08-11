@@ -86,6 +86,9 @@ class InputMonitor:
                     self.context_menu_active = False
                 else:
                     self.event_callback("Left Click", f"X={x}, Y={y}")
+                    # Call context menu callback for UI element detection on ALL left clicks
+                    if self.context_menu_callback:
+                        self.context_menu_callback(x, y, button, pressed)
                     
             elif button == Button.right:
                 self.event_callback("Right Click", f"X={x}, Y={y}", context_action="CONTEXT_MENU_OPENED")

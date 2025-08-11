@@ -7,6 +7,9 @@ from notification import NotificationSystem
 from input_monitor import InputMonitor
 from context_analyzer import ContextAnalyzer
 from window_monitor import WindowMonitor
+from action_detector import ActionDetector
+from pywinauto import Desktop
+import psutil
 
 class ShortcutCoach:
     def __init__(self):
@@ -18,6 +21,14 @@ class ShortcutCoach:
         
         # Initialize context analyzer with notification system
         self.context_analyzer = ContextAnalyzer(self.notification_system)
+        
+        # Initialize action detector for Excel actions
+        self.action_detector = ActionDetector(self.notification_system)
+        
+        # Initialize UI Automation
+        self.ui_desk = Desktop(backend="uia")
+        self.last_click_time = 0
+        self.click_cooldown = 0.1  # 100ms cooldown between clicks
         
         # Initialize input monitor with callbacks
         self.input_monitor = InputMonitor(
@@ -50,8 +61,114 @@ class ShortcutCoach:
         except AttributeError:
             self.log_event("Key Release", str(key))
     
+    def detect_ui_element(self, x, y):
+        """Detect what UI element was clicked using Windows UI Automation"""
+        try:
+            # Get element at click point
+            element = self.ui_desk.from_point(x, y)
+            element_info = element.element_info
+            rect = element.rectangle()
+            
+            # Get process info
+            process_id = element_info.process_id
+            try:
+                process = psutil.Process(process_id)
+                app_name = process.name()
+            except:
+                app_name = "Unknown"
+            
+            # Return element information
+            return {
+                "name": element_info.name,
+                "type": str(element_info.control_type),
+                "automation_id": getattr(element_info, "automation_id", None),
+                "class_name": getattr(element_info, "class_name", None),
+                "app_name": app_name,
+                "coordinates": (x, y),
+                "bounds": (rect.left, rect.top, rect.right, rect.bottom),
+                "center": ((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+            }
+            
+        except Exception as e:
+            return {
+                "error": str(e),
+                "coordinates": (x, y),
+                "app_name": "Unknown"
+            }
+    
+    def get_shortcut_suggestion(self, element_info):
+        """Get shortcut suggestion based on clicked element"""
+        if "error" in element_info:
+            return None
+        
+        element_name = element_info["name"].lower()
+        element_type = element_info["type"].lower()
+        app_name = element_info["app_name"].lower()
+        
+        # Excel shortcuts
+        if "excel" in app_name:
+            if "save" in element_name:
+                return "Ctrl + S", "Save"
+            elif "new" in element_name:
+                return "Ctrl + N", "New"
+            elif "open" in element_name:
+                return "Ctrl + O", "Open"
+            elif "bold" in element_name:
+                return "Ctrl + B", "Bold"
+            elif "italic" in element_name:
+                return "Ctrl + I", "Italic"
+            elif "underline" in element_name:
+                return "Ctrl + U", "Underline"
+            elif "copy" in element_name:
+                return "Ctrl + C", "Copy"
+            elif "paste" in element_name:
+                return "Ctrl + V", "Paste"
+            elif "cut" in element_name:
+                return "Ctrl + X", "Cut"
+            elif "undo" in element_name:
+                return "Ctrl + Z", "Undo"
+            elif "redo" in element_name:
+                return "Ctrl + Y", "Redo"
+        
+        # Cursor/VS Code shortcuts
+        elif "cursor" in app_name or "code" in app_name:
+            if "save" in element_name:
+                return "Ctrl + S", "Save"
+            elif "new file" in element_name:
+                return "Ctrl + N", "New File"
+            elif "find" in element_name:
+                return "Ctrl + F", "Find"
+            elif "replace" in element_name:
+                return "Ctrl + H", "Replace"
+            elif "comment" in element_name:
+                return "Ctrl + /", "Toggle Comment"
+        
+        # Chrome shortcuts
+        elif "chrome" in app_name:
+            if "new tab" in element_name:
+                return "Ctrl + T", "New Tab"
+            elif "close" in element_name:
+                return "Ctrl + W", "Close Tab"
+            elif "refresh" in element_name:
+                return "Ctrl + R", "Refresh"
+            elif "back" in element_name:
+                return "Alt + ←", "Go Back"
+            elif "forward" in element_name:
+                return "Alt + →", "Go Forward"
+        
+        return None
+    
+    def should_process_click(self, x, y):
+        """Check if we should process this click (avoid duplicates)"""
+        current_time = time.time()
+        if current_time - self.last_click_time < self.click_cooldown:
+            return False
+        
+        self.last_click_time = current_time
+        return True
+    
     def handle_context_menu_click(self, x, y, button, pressed):
-        """Handle context menu clicks with screenshot capture and analysis"""
+        """Handle context menu clicks with UI Automation detection"""
         if pressed and button.name == 'left':
             # Check if this left-click might be a context menu selection
             if hasattr(self.input_monitor, 'last_right_click_time') and \
@@ -60,49 +177,58 @@ class ShortcutCoach:
                 
                 self.log_event("Left Click (Context Menu)", f"X={x}, Y={y}", context_action="MENU_SELECTION")
                 
-                # Capture screenshot and analyze menu text
-                screenshot_path, screenshot = self.screenshot_manager.capture_context_menu_screenshot(x, y)
-                if screenshot:
-                    menu_text = self.screenshot_manager.analyze_menu_text(screenshot)
-                    if menu_text:
-                        # Analyze the context menu selection
-                        clicked_item = self.context_analyzer.analyze_context_menu_selection(x, y, menu_text)
-                        if clicked_item:
-                            print(f"DEBUG: Context menu item selected: {clicked_item}")
-                            self.log_event("Menu Item Selected", f"'{clicked_item}' at X={x}, Y={y}", 
-                                         context_action=f"SELECTED_{clicked_item.upper()}")
-                            
-                            # Get shortcut suggestion for this action
-                            shortcut, description = self.context_analyzer.suggest_shortcut(clicked_item)
-                            if shortcut:
-                                print(f"DEBUG: Suggesting shortcut {shortcut} for {clicked_item}")
-                                self.notification_system.suggest_shortcut(clicked_item, shortcut)
-                            else:
-                                print(f"DEBUG: No shortcut found for {clicked_item}")
-                        else:
-                            print("DEBUG: No context menu item identified")
+                # Use UI Automation to detect what was clicked
+                if self.should_process_click(x, y):
+                    element_info = self.detect_ui_element(x, y)
+                    print(f"🎯 UI Element Clicked: {element_info['name']} in {element_info['app_name']}")
+                    
+                    # Get shortcut suggestion
+                    result = self.get_shortcut_suggestion(element_info)
+                    if result:
+                        shortcut, description = result
+                        print(f"💡 Use {shortcut} for {description}")
+                        self.notification_system.suggest_shortcut(description, shortcut)
+                        self.log_event("Shortcut Suggested", f"{shortcut} for {description}", 
+                                     context_action=f"SHORTCUT_{shortcut.replace(' + ', '_').upper()}")
+                    else:
+                        print(f"ℹ️ No shortcut available for {element_info['name']}")
+                    
+                    # Also detect actions (like Excel cell navigation)
+                    self.action_detector.detect_action(x, y, element_info['app_name'])
                 
                 self.input_monitor.context_menu_active = False
             else:
+                # Regular left click - detect UI element
+                if self.should_process_click(x, y):
+                    element_info = self.detect_ui_element(x, y)
+                    print(f"🖱️ Clicked: {element_info['name']} in {element_info['app_name']}")
+                    
+                    # Get shortcut suggestion for buttons
+                    result = self.get_shortcut_suggestion(element_info)
+                    if result:
+                        shortcut, description = result
+                        print(f"💡 Use {shortcut} for {description}")
+                        self.notification_system.suggest_shortcut(description, shortcut)
+                        self.log_event("Shortcut Suggested", f"{shortcut} for {description}", 
+                                     context_action=f"SHORTCUT_{shortcut.replace(' + ', '_').upper()}")
+                    else:
+                        print(f"ℹ️ No shortcut available for {element_info['name']}")
+                    
+                    # Also detect actions (like Excel cell navigation)
+                    self.action_detector.detect_action(x, y, element_info['app_name'])
+                
                 self.log_event("Left Click", f"X={x}, Y={y}")
                 
         elif pressed and button.name == 'right':
             self.log_event("Right Click", f"X={x}, Y={y}", context_action="CONTEXT_MENU_OPENED")
-            
-            # Capture screenshot of the context menu when it opens
-            screenshot_path, screenshot = self.screenshot_manager.capture_context_menu_screenshot(x, y)
-            if screenshot:
-                menu_text = self.screenshot_manager.analyze_menu_text(screenshot)
-                if menu_text:
-                    self.log_event("Context Menu Opened", f"Available options: {menu_text[:100]}...", 
-                                 context_action="MENU_OPTIONS_DETECTED")
     
     def start_tracking(self):
         """Start event tracking"""
         try:
             print("Starting Shortcut Coach...")
             print("Press Ctrl+C to stop tracking")
-            print("Now tracking context menu actions and clipboard changes!")
+            print("🎯 Now tracking UI elements in real-time using Windows UI Automation!")
+            print("💡 Click on any button, tab, or UI element to get shortcut suggestions!")
             print("-" * 50)
             
             self.running = True

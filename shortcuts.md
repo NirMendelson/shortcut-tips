@@ -2,11 +2,23 @@
 
 This document contains all the keyboard shortcuts that our shortcut tips system should detect and notify users about.
 
+## Excel
+
+[ ] Ctrl + Up key – Jump to the beggining of data region
+[ ] Tab – Move one cell right
+[ ] Shift + Tab – Move one cell left
+[ ] Enter – Move one cell down
+[ ] Shift + Enter – Move one cell up
+[ ] Ctrl + Home – Go to A1
+[ ] Ctrl + End – Go to last used cell
+[ ] Ctrl + Page Up / Page Down – Switch between worksheets
+
+
 ## Windows (General OS)
 
-[ ] Ctrl + C - Copy
-[ ] Ctrl + X - Cut
-[ ] Ctrl + V - Paste
+[x] Ctrl + C - Copy
+[x] Ctrl + X - Cut
+[x] Ctrl + V - Paste
 [ ] Ctrl + Z - Undo
 [ ] Ctrl + Y - Redo
 [ ] Ctrl + A - Select all
