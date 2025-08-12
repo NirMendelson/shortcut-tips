@@ -4,7 +4,10 @@ This document contains all the keyboard shortcuts that our shortcut tips system 
 
 ## Excel
 
-[ ] Ctrl + Up key – Jump to the beggining of data region
+[x] Ctrl + Up key – Jump to the beggining of data region
+[x] Ctrl + Space - Select entire column
+[x] Shift + Space - Select entire row
+[x] Ctrl + Page Up/Page Down - toggle sheets
 [ ] Tab – Move one cell right
 [ ] Shift + Tab – Move one cell left
 [ ] Enter – Move one cell down
@@ -33,8 +36,8 @@ This document contains all the keyboard shortcuts that our shortcut tips system 
 
 [ ] Ctrl + Arrow Keys - Jump to the edge of data region
 [ ] Ctrl + Shift + Arrow Keys - Select to edge of data region
-[ ] Ctrl + Space - Select entire column
-[ ] Shift + Space - Select entire row
+[x] Ctrl + Space - Select entire column
+[x] Shift + Space - Select entire row
 [ ] Ctrl + Shift + L - Toggle filters
 [ ] Ctrl + T - Convert range to table
 [ ] Alt + = - AutoSum
@@ -42,6 +45,7 @@ This document contains all the keyboard shortcuts that our shortcut tips system 
 [ ] Ctrl + "-" - Delete row/column
 [ ] F2 - Edit selected cell
 [ ] Ctrl + 1 - Format cells
+[x] Ctrl + Page Up/Page Down - Switch between worksheets
 [ ] Ctrl + Z - Undo
 [ ] Ctrl + Y - Redo
 
@@ -92,9 +96,13 @@ This document contains all the keyboard shortcuts that our shortcut tips system 
 1. **Context Menu Actions**: Right-click and select the action (e.g., right-click → Copy)
 2. **Direct Shortcut Usage**: Use the keyboard shortcut directly
 3. **Check Notifications**: Verify that the appropriate shortcut tip appears
+4. **Excel Column/Row Selection**: Click on column headers (A, B, C) or row headers (1, 2, 3) in Excel
+5. **Excel Sheet Navigation**: Click on sheet tabs (Sheet1, Sheet2, etc.) to test Ctrl + Page Up/Page Down
 
 ## Detection Methods
 
 - **Context Menu Analysis**: OCR analysis of right-click menus
 - **Keyboard Monitoring**: Direct detection of key combinations
 - **Action Mapping**: Mapping detected actions to relevant shortcuts
+- **Excel Header Detection**: Detecting clicks on column/row headers for Ctrl+Space/Shift+Space
+- **Excel Sheet Tab Detection**: Detecting clicks on sheet tabs for Ctrl+Page Up/Page Down

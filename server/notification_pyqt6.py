@@ -12,7 +12,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QPainter, QPainterPath, QColor, QPen, QBrush, QPixmap, QImage,
-    QLinearGradient, QRadialGradient, QTransform
+    QLinearGradient, QRadialGradient, QTransform, QFont, QFontMetrics
 )
 
 
@@ -21,13 +21,16 @@ def clamp_byte(v):
 
 
 class LiquidGlassNotification(QWidget):
-    """Liquid glass notification: simulated backdrop blur + layered lighting"""
+    """Liquid glass notification with anchor+offset positioning"""
 
-    def __init__(self, message, shortcut, duration=3.0):
+    def __init__(self, message, shortcut, duration=3.0,
+                 corner="bottom-right", offset=(30, 60)):  # lower by default
         super().__init__()
         self.message = message
         self.shortcut = shortcut
         self.duration = float(duration)
+        self.corner = corner
+        self.offset = offset  # (ox, oy) in px
 
         # Window flags and attributes
         self.setWindowFlags(
@@ -39,19 +42,17 @@ class LiquidGlassNotification(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
-        # Start fully opaque
         self.setWindowOpacity(1.0)
 
-        # Geometry
-        self.width = 320  # Reduced from 380
-        self.height = 40  # Reduced from 56
-        screen = QApplication.primaryScreen().geometry()
-        x = screen.width() - self.width - 10
-        y = screen.height() - self.height - 60  # Changed from y = 120 to bottom-right
-        self.setGeometry(x, y, self.width, self.height)
+        # Layout padding and width cap
+        self.pad_x = 16
+        self.pad_y = 8
+        self.max_width = 600
 
         # UI
         self.setup_ui()
+        self._resize_to_text()
+        self._move_to_anchor()
 
         # Backdrop buffers
         self._backdrop_img = None
@@ -88,13 +89,86 @@ class LiquidGlassNotification(QWidget):
         self.force_close_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.force_close_timer.timeout.connect(self.force_close)
 
+    # ---------- sizing and UI ----------
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(self.pad_x, self.pad_y, self.pad_x, self.pad_y)
+
+        self.message_label = QLabel(self.message)
+        self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.message_label.setWordWrap(False)
+        self.message_label.setStyleSheet("""
+            QLabel {
+                color: #121212;
+                font-family: 'Segoe UI';
+                font-size: 16px;
+                font-weight: 500;
+                background: transparent;
+                border: none;
+                padding: 0px;
+                letter-spacing: 0.1px;
+                margin: 0px;
+            }
+        """)
+        layout.addWidget(self.message_label)
+
+    def _resize_to_text(self):
+        fm = QFontMetrics(self.message_label.font())
+        text = self.message_label.text()
+
+        max_text_w = self.max_width - self.pad_x * 2
+        full_w = fm.horizontalAdvance(text)
+
+        if full_w > max_text_w:
+            text = fm.elidedText(text, Qt.TextElideMode.ElideRight, max_text_w)
+            self.message_label.setText(text)
+            text_w = fm.horizontalAdvance(text)
+        else:
+            text_w = full_w
+
+        text_h = fm.height()
+        w = text_w + self.pad_x * 2
+        h = max(32, text_h + self.pad_y * 2)
+
+        self.setFixedSize(w, h)
+
+    # ---------- positioning ----------
+
+    def _screen_geo(self):
+        wh = self.windowHandle()
+        scr = wh.screen() if wh else QApplication.primaryScreen()
+        return scr.availableGeometry()
+
+    def _move_to_anchor(self):
+        geo = self._screen_geo()
+        ox, oy = self.offset
+        if self.corner == "bottom-right":
+            x = geo.right()  - self.width()  - ox
+            y = geo.bottom() - self.height() - oy
+        elif self.corner == "bottom-left":
+            x = geo.left() + ox
+            y = geo.bottom() - self.height() - oy
+        elif self.corner == "top-right":
+            x = geo.right() - self.width() - ox
+            y = geo.top() + oy
+        else:  # "top-left"
+            x = geo.left() + ox
+            y = geo.top() + oy
+        self.move(x, y)
+
+    def set_anchor(self, corner=None, offset=None):
+        """Update corner/offset at runtime and reposition immediately."""
+        if corner is not None:
+            self.corner = corner
+        if offset is not None:
+            self.offset = offset
+        self._move_to_anchor()
+
     # ---------- lifecycle ----------
 
     def showEvent(self, event):
-        # Backdrop ready right after show
         QTimer.singleShot(0, self._update_backdrop_now)
-
-        # Auto-dismiss timers
         self.hide_timer.start(int(self.duration * 1000))
         self.force_close_timer.start(int(self.duration * 1000) + 1000)
         super().showEvent(event)
@@ -105,6 +179,7 @@ class LiquidGlassNotification(QWidget):
 
     def resizeEvent(self, event):
         self._schedule_backdrop_update()
+        self._move_to_anchor()  # keep anchored if size changes
         super().resizeEvent(event)
 
     # ---------- timers and closing ----------
@@ -120,34 +195,11 @@ class LiquidGlassNotification(QWidget):
             self.hide()
             self.close()
 
-    # ---------- UI ----------
-
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)  # Small padding for breathing room
-
-        self.message_label = QLabel(self.message)
-        self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.message_label.setStyleSheet("""
-            QLabel {
-                color: #121212;
-                font-family: 'Segoe UI';
-                font-size: 12px;
-                font-weight: 500;
-                background: transparent;
-                border: none;
-                padding: 0px;
-                letter-spacing: 0.1px;
-                margin: 0px;
-            }
-        """)
-        layout.addWidget(self.message_label)
-
     # ---------- backdrop blur & helpers ----------
 
     def _schedule_backdrop_update(self):
         self._need_backdrop_refresh = True
-        self._backdrop_timer.start(16)  # ~60fps throttle during movement
+        self._backdrop_timer.start(16)
 
     def _update_backdrop_now(self):
         try:
@@ -157,14 +209,13 @@ class LiquidGlassNotification(QWidget):
             if not screen or w <= 0 or h <= 0:
                 return
 
-            shot = screen.grabWindow(0, x, y, w, h)  # QPixmap under our window
+            shot = screen.grabWindow(0, x, y, w, h)
             if shot.isNull():
                 return
 
             dpr = shot.devicePixelRatio()
-            size_px = shot.size()  # device pixels
+            size_px = shot.size()
 
-            # Blur via graphics scene for quality
             scene = QGraphicsScene()
             item = QGraphicsPixmapItem(shot)
             blur = QGraphicsBlurEffect()
@@ -180,10 +231,7 @@ class LiquidGlassNotification(QWidget):
             scene.render(p, target=QRectF(0, 0, size_px.width(), size_px.height()))
             p.end()
 
-            # Brightness/contrast micro lift to avoid gray sludge on dark UIs
             self._backdrop_img = self._adjust_brightness_contrast(img, brightness=0.05, contrast=0.05)
-
-            # Average color for faint tint
             self._avg_bg_color = self._compute_average_color(self._backdrop_img)
 
             self._need_backdrop_refresh = False
@@ -194,15 +242,13 @@ class LiquidGlassNotification(QWidget):
             self.update()
 
     def _adjust_brightness_contrast(self, img: QImage, brightness=0.0, contrast=0.0) -> QImage:
-        # brightness, contrast in [-1..+1] small values
         if img is None:
             return None
         out = QImage(img.size(), QImage.Format.Format_ARGB32_Premultiplied)
         out.setDevicePixelRatio(img.devicePixelRatio())
         w, h = img.width(), img.height()
 
-        # Map factors
-        b = int(255 * brightness)  # +/- 12 for 0.05
+        b = int(255 * brightness)
         c = contrast
         c_factor = (259 * (c * 255 + 255)) / (255 * (259 - c * 255)) if c != 0 else 1.0
 
@@ -268,32 +314,26 @@ class LiquidGlassNotification(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        radius = self.height // 2
-        rect_w = self.width
-        rect_h = self.height
+        rect_w = self.width()
+        rect_h = self.height()
+        radius = rect_h // 2
 
         capsule = QPainterPath()
         capsule.addRoundedRect(0, 0, rect_w, rect_h, radius, radius)
 
-        # Clip to capsule
         painter.save()
         painter.setClipPath(capsule)
 
-        # 0) blurred backdrop
         if self._backdrop_img is not None:
             painter.drawImage(0, 0, self._backdrop_img)
 
-        # 1) faint background-aware tint
         tint = QColor(self._avg_bg_color)
         tint.setRed(int((tint.red() + 255) / 2))
         tint.setGreen(int((tint.green() + 255) / 2))
         tint.setBlue(int((tint.blue() + 255) / 2))
-        painter.fillPath(capsule, QBrush(QColor(tint.red(), tint.green(), tint.blue(), 36)))  # ~14%
+        painter.fillPath(capsule, QBrush(QColor(tint.red(), tint.green(), tint.blue(), 36)))
+        painter.fillPath(capsule, QBrush(QColor(255, 255, 255, 60)))
 
-        # 2) translucent white layer
-        painter.fillPath(capsule, QBrush(QColor(255, 255, 255, 60)))  # ~24%
-
-        # 3) static micro-noise
         if self._noise_tile is not None:
             brush = QBrush(QPixmap.fromImage(self._noise_tile))
             brush.setTransform(QTransform())
@@ -301,7 +341,6 @@ class LiquidGlassNotification(QWidget):
 
         painter.restore()
 
-        # Shadows: ambient + tiny contact
         ambient = QPainterPath()
         ambient.addRoundedRect(-3, -3, rect_w + 6, rect_h + 6, radius + 3, radius + 3)
         painter.fillPath(ambient, QBrush(QColor(0, 0, 0, 16)))
@@ -310,7 +349,6 @@ class LiquidGlassNotification(QWidget):
         contact.addRoundedRect(6, rect_h - 5, rect_w - 12, 3, 2, 2)
         painter.fillPath(contact, QBrush(QColor(0, 0, 0, 22)))
 
-        # Directional highlights (assume light from top-left)
         top_grad = QLinearGradient(0, 0, 0, rect_h * 0.55)
         top_grad.setColorAt(0.0, QColor(255, 255, 255, 56))
         top_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
@@ -353,32 +391,44 @@ class LiquidGlassNotification(QWidget):
 
 
 class PyQt6NotificationSystem(QObject):
-    """
-    Thread-safe notification system.
-    Call suggest_shortcut(...) from any thread; it queues to the GUI thread.
-    """
-    show_requested = pyqtSignal(str, str, float)  # action, shortcut, duration
+    """Thread-safe notification system with global position control."""
+    show_requested = pyqtSignal(str, str, float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.notifications = []
+        self.corner = "bottom-right"
+        self.offset = (10, 30)  # lower default
         self.show_requested.connect(self._on_show_requested, type=Qt.ConnectionType.QueuedConnection)
         print("PyQt6 Notification system started")
+
+    def set_position(self, corner=None, offset=None):
+        """Change default and reposition current notifications right away."""
+        if corner is not None:
+            self.corner = corner
+        if offset is not None:
+            self.offset = offset
+        for n in list(self.notifications):
+            if n.isVisible():
+                n.set_anchor(self.corner, self.offset)
 
     def suggest_shortcut(self, action, shortcut, duration=3.0):
         self.show_requested.emit(action, shortcut, float(duration))
 
     def _on_show_requested(self, action, shortcut, duration):
         try:
-            message = f"Use {shortcut} for {action.lower()}"
-            notification = LiquidGlassNotification(message, shortcut, duration)
+            message = f"Use {shortcut} to {action.lower()}"
+            notification = LiquidGlassNotification(
+                message, shortcut, duration,
+                corner=self.corner, offset=self.offset
+            )
             notification.show_notification()
-            self.notifications.append(notification)  # keep reference
+            self.notifications.append(notification)
             self.notifications = [n for n in self.notifications if n.isVisible()]
             print(f"🔔 NOTIFICATION: {message}")
         except Exception as e:
             print(f"Error showing PyQt6 notification: {e}")
-            print(f"🔔 NOTIFICATION: Use {shortcut} for {action.lower()}")
+            print(f"🔔 NOTIFICATION: Use {shortcut} to {action.lower()}")
 
     def stop(self):
         for notification in self.notifications:
@@ -393,9 +443,7 @@ if __name__ == "__main__":
 
     notifier = PyQt6NotificationSystem()
 
-    # Single example: call from GUI thread
     notifier.suggest_shortcut("Copy", "Ctrl+C", duration=3.0)
 
-    # No second demo notification, no micro-scale animation
     QTimer.singleShot(6000, app.quit)
     sys.exit(app.exec())

@@ -42,6 +42,18 @@ class ActionDetector:
                 if cell_address:
                     self.handle_cell_selection(cell_address, x, y)
             
+            # Check if this is a column header click
+            elif self.is_excel_column_header(element_info):
+                self.handle_column_header_click(element_info)
+            
+            # Check if this is a row header click
+            elif self.is_excel_row_header(element_info):
+                self.handle_row_header_click(element_info)
+            
+            # Check if this is a sheet tab click
+            elif self.is_excel_sheet_tab(element_info):
+                self.handle_sheet_tab_click(element_info)
+            
             # Check if this is a button/ribbon click
             elif self.is_excel_button(element_info):
                 self.handle_button_click(element_info)
@@ -58,6 +70,44 @@ class ActionDetector:
                 # Check if it matches cell pattern (letter + number)
                 if any(c.isalpha() for c in name) and any(c.isdigit() for c in name):
                     return True
+            return False
+        except:
+            return False
+    
+    def is_excel_column_header(self, element_info):
+        """Check if the clicked element is an Excel column header"""
+        try:
+            name = element_info.name
+            if name and len(name) <= 3:  # A, B, C, AA, BB, etc.
+                # Check if it's only letters (column headers)
+                if name.isalpha() and name.isupper():
+                    return True
+            return False
+        except:
+            return False
+    
+    def is_excel_row_header(self, element_info):
+        """Check if the clicked element is an Excel row header"""
+        try:
+            name = element_info.name
+            if name and len(name) <= 5:  # 1, 2, 3, 10, 100, etc.
+                # Check if it's only digits (row headers)
+                if name.isdigit():
+                    return True
+            return False
+        except:
+            return False
+    
+    def is_excel_sheet_tab(self, element_info):
+        """Check if the clicked element is an Excel sheet tab"""
+        try:
+            name = element_info.name.lower()
+            # Excel sheet tabs typically contain "sheet" or are named like "Sheet1", "Sheet2", etc.
+            if "sheet" in name or (name.startswith("sheet") and any(c.isdigit() for c in name)):
+                return True
+            # Also check for other common sheet naming patterns
+            if name in ["sheet1", "sheet2", "sheet3", "sheet4", "sheet5"]:
+                return True
             return False
         except:
             return False
@@ -130,20 +180,51 @@ class ActionDetector:
         return False
     
     def suggest_ctrl_up_shortcut(self, from_cell, to_cell):
-        """Suggest Ctrl + Up shortcut for jumping to beginning of data region"""
-        message = f"💡 Use Ctrl + Up to jump from {from_cell} to beginning of data region"
+        """Show a tip: Ctrl + Up Arrow goes to the first row."""
+        message = "Use Ctrl + Up Arrow to go to the first row"
         print(message)
-        
+
         # Send notification
         self.notification_system.suggest_shortcut(
-            "Jump to beginning of data region", 
-            "Ctrl + Up"
+            "Go to the first row",
+            "Ctrl + Up Arrow"
         )
+
     
     def handle_button_click(self, element_info):
         """Handle Excel button clicks (this is already handled in main.py)"""
         # This is handled by the main UI detection system
         pass
+
+    def handle_column_header_click(self, element_info):
+        """Handle when user clicks on an Excel column header"""
+        print(f"📍 Excel Column Header Selected: {element_info.name}")
+        message = f"💡 Use Ctrl + Space to select the entire column"
+        print(message)
+        self.notification_system.suggest_shortcut(
+            f"Select entire column",
+            "Ctrl + Space"
+        )
+    
+    def handle_row_header_click(self, element_info):
+        """Handle when user clicks on an Excel row header"""
+        print(f"📍 Excel Row Header Selected: {element_info.name}")
+        message = f"💡 Use Shift + Space to select the entire row {element_info.name}"
+        print(message)
+        self.notification_system.suggest_shortcut(
+            f"Select entire row",
+            "Shift + Space"
+        )
+    
+    def handle_sheet_tab_click(self, element_info):
+        """Handle when user clicks on an Excel sheet tab"""
+        print(f"📍 Excel Sheet Tab Selected: {element_info.name}")
+        message = "💡 Use Ctrl + Page Up/Page Down to switch between worksheets"
+        print(message)
+        self.notification_system.suggest_shortcut(
+            "Switch between worksheets",
+            "Ctrl + Page Up/Page Down"
+        )
     
     def should_process_action(self):
         """Check if we should process this action (avoid duplicates)"""
