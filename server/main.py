@@ -3,16 +3,20 @@ import sys
 import threading
 from database import DatabaseManager
 from screenshot import ScreenshotManager
-from notification import NotificationSystem
+from notification_pyqt6 import PyQt6NotificationSystem as NotificationSystem
 from input_monitor import InputMonitor
 from context_analyzer import ContextAnalyzer
 from window_monitor import WindowMonitor
 from action_detector import ActionDetector
 from pywinauto import Desktop
 import psutil
+from PyQt6.QtWidgets import QApplication
 
 class ShortcutCoach:
     def __init__(self):
+        # Initialize PyQt6 application in main thread
+        self.qt_app = QApplication([])
+        
         # Initialize all modules
         self.db_manager = DatabaseManager()
         self.screenshot_manager = ScreenshotManager()
@@ -241,7 +245,10 @@ class ShortcutCoach:
             # Keep the main thread alive and track windows
             try:
                 while self.running:
-                    time.sleep(1.0)
+                    # Process Qt events to keep notifications working
+                    self.qt_app.processEvents()
+                    time.sleep(0.1)  # Reduced sleep time for better responsiveness
+                    
                     # Log window changes periodically
                     window_title, app_name = self.window_monitor.check_window_change()
                     if window_title:
@@ -266,6 +273,8 @@ class ShortcutCoach:
         self.running = False
         self.input_monitor.stop()
         self.notification_system.stop()
+        if self.qt_app:
+            self.qt_app.quit()
 
 
 def main():

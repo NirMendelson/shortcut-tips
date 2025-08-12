@@ -51,7 +51,12 @@ class InputMonitor:
                 except Exception as e:
                     pass  # Clipboard might be locked by other applications
                 
-                time.sleep(0.5)  # Check every 500ms
+                # Use shorter sleep time and check running status more frequently
+                for _ in range(10):  # Check 10 times per second
+                    if not self.running:
+                        break
+                    time.sleep(0.1)
+                    
         except Exception as e:
             print(f"Clipboard monitoring error: {e}")
     
@@ -160,6 +165,13 @@ class InputMonitor:
         if self.keyboard_listener:
             try:
                 self.keyboard_listener.stop()
+            except:
+                pass
+        
+        # Wait for clipboard monitoring thread to finish
+        if self.clipboard_monitor_thread and self.clipboard_monitor_thread.is_alive():
+            try:
+                self.clipboard_monitor_thread.join(timeout=1.0)  # Wait max 1 second
             except:
                 pass
     
