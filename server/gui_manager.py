@@ -218,9 +218,9 @@ class ShortcutCoachGUI(QMainWindow):
         
         # Opportunities table
         self.opportunities_table = QTableWidget()
-        self.opportunities_table.setColumnCount(4)
+        self.opportunities_table.setColumnCount(2)
         self.opportunities_table.setHorizontalHeaderLabels([
-            "Action", "Current Method", "Suggested Shortcut", "Frequency"
+            "Shortcut", "Counter"
         ])
         self.opportunities_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.opportunities_table)
@@ -385,27 +385,49 @@ class ShortcutCoachGUI(QMainWindow):
             opportunities = cursor.fetchall()
             conn.close()
             
-            # Update table
+            # Update table with 2 columns: Shortcut and Counter
             self.opportunities_table.setRowCount(len(opportunities))
             for i, opp in enumerate(opportunities):
                 action = opp[0] or "Unknown"
                 frequency = opp[1]
                 
-                # Map actions to shortcuts
-                shortcut_map = {
-                    "COPY": "Ctrl+C",
-                    "PASTE": "Ctrl+V", 
-                    "CUT": "Ctrl+X",
-                    "SAVE": "Ctrl+S"
-                }
+                # Map actions to shortcuts - handle various formats
+                shortcut = "Unknown"
+                if action:
+                    action_lower = action.lower()
+                    
+                    # Check for exact matches first (most reliable)
+                    if action == "SHORTCUT_CTRL_C":
+                        shortcut = "Ctrl + C"
+                    elif action == "SHORTCUT_CTRL_V":
+                        shortcut = "Ctrl + V"
+                    elif action == "SHORTCUT_CTRL_X":
+                        shortcut = "Ctrl + X"
+                    elif action == "SHORTCUT_CTRL_S":
+                        shortcut = "Ctrl + S"
+                    # Then check for detected actions
+                    elif action == "COPY_DETECTED":
+                        shortcut = "Ctrl + C"
+                    elif action == "PASTE_DETECTED":
+                        shortcut = "Ctrl + V"
+                    elif action == "CUT_DETECTED":
+                        shortcut = "Ctrl + X"
+                    elif action == "SAVE_DETECTED":
+                        shortcut = "Ctrl + S"
+                    # Finally check for partial matches (least reliable)
+                    elif "copy" in action_lower and "shortcut" not in action_lower:
+                        shortcut = "Ctrl + C"
+                    elif "paste" in action_lower and "shortcut" not in action_lower:
+                        shortcut = "Ctrl + V"
+                    elif "cut" in action_lower and "shortcut" not in action_lower:
+                        shortcut = "Ctrl + X"
+                    elif "save" in action_lower and "shortcut" not in action_lower:
+                        shortcut = "Ctrl + S"
                 
-                suggested_shortcut = shortcut_map.get(action, "Unknown")
-                current_method = "Right-click menu"
-                
-                self.opportunities_table.setItem(i, 0, QTableWidgetItem(action))
-                self.opportunities_table.setItem(i, 1, QTableWidgetItem(current_method))
-                self.opportunities_table.setItem(i, 2, QTableWidgetItem(suggested_shortcut))
-                self.opportunities_table.setItem(i, 3, QTableWidgetItem(str(frequency)))
+                # Column 0: Shortcut (e.g., "Ctrl + C")
+                self.opportunities_table.setItem(i, 0, QTableWidgetItem(shortcut))
+                # Column 1: Counter (how many times you didn't use the shortcut)
+                self.opportunities_table.setItem(i, 1, QTableWidgetItem(str(frequency)))
                 
         except Exception as e:
             print(f"Error refreshing shortcut opportunities: {e}")

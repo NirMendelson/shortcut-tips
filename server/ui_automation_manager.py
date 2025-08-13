@@ -180,26 +180,26 @@ class UIAutomationManager:
             elif "bookmark" in element_name:
                 return "Ctrl + D", "Bookmark"
         
-        # Generic shortcuts for any application
-        if "copy" in element_name:
+        # Generic shortcuts for any application - but be more specific to avoid false positives
+        if "copy" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + C", "Copy"
-        elif "paste" in element_name:
+        elif "paste" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + V", "Paste"
-        elif "cut" in element_name:
+        elif "cut" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + X", "Cut"
-        elif "save" in element_name:
+        elif "save" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + S", "Save"
-        elif "new" in element_name:
+        elif "new" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + N", "New"
-        elif "open" in element_name:
+        elif "open" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + O", "Open"
-        elif "undo" in element_name:
+        elif "undo" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + Z", "Undo"
-        elif "redo" in element_name:
+        elif "redo" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + Y", "Redo"
-        elif "find" in element_name:
+        elif "find" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + F", "Find"
-        elif "print" in element_name:
+        elif "print" in element_name and "shortcut" not in element_name.lower():
             return "Ctrl + P", "Print"
         
         return None
@@ -233,24 +233,18 @@ class UIAutomationManager:
                 import win32gui
                 import win32process
                 hwnd = win32gui.GetForegroundWindow()
-                print(f"🔍 Debug: Method 1 - HWND: {hwnd}")
                 if hwnd:
                     _, process_id = win32process.GetWindowThreadProcessId(hwnd)
-                    print(f"🔍 Debug: Method 1 - Process ID: {process_id}")
                     if process_id:
                         process = psutil.Process(process_id)
                         app_name = process.name()
                         if app_name:
                             app_name = app_name.replace('.exe', '')  # Remove .exe extension
-                            print(f"🔍 Debug: Method 1 - Success: {app_name}")
-                        else:
-                            print(f"🔍 Debug: Method 1 - Process name is None")
                     else:
-                        print(f"🔍 Debug: Method 1 - No process ID")
+                        app_name = "Unknown"
                 else:
-                    print(f"🔍 Debug: Method 1 - No HWND")
+                    app_name = "Unknown"
             except Exception as e1:
-                print(f"🔍 Debug: Method 1 - Failed: {e1}")
                 app_name = "Unknown"
             
             # Get window title from the same HWND
@@ -261,10 +255,6 @@ class UIAutomationManager:
                     window_title = "Unknown"
             except:
                 window_title = "Unknown"
-            
-            print(f"🔍 Debug: Active window title: {window_title}")
-            
-            print(f"🔍 Debug: Final app_name: {app_name}")
             
             window_info = {
                 "title": window_title,
@@ -279,7 +269,6 @@ class UIAutomationManager:
             return window_info
             
         except Exception as e:
-            print(f"🔍 Debug: get_active_window_info failed: {e}")
             return {
                 "title": "Unknown",
                 "app_name": "Unknown",
