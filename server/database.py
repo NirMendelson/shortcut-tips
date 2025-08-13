@@ -1,58 +1,95 @@
 import sqlite3
+import time
 from datetime import datetime
 
 class DatabaseManager:
-    def __init__(self, db_path="shortcuts.db"):
+    def __init__(self, db_path='shortcuts.db'):
         self.db_path = db_path
         self.init_database()
     
     def init_database(self):
-        """Initialize SQLite database with basic schema"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Events table for Phase 1
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                details TEXT,
-                window_title TEXT,
-                app_name TEXT,
-                context_action TEXT
-            )
-        ''')
-        
-        # Check if context_action column exists, add it if not
+        """Initialize the database with required tables"""
         try:
-            cursor.execute("SELECT context_action FROM events LIMIT 1")
-        except sqlite3.OperationalError:
-            print("Adding context_action column to existing database...")
-            cursor.execute("ALTER TABLE events ADD COLUMN context_action TEXT")
-        
-        conn.commit()
-        conn.close()
-        print("Database initialized successfully")
-    
-    def log_event(self, event_type, details="", window_title="", app_name="", context_action=""):
-        """Log event to database and console"""
-        try:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            # Log to console
-            print(f"{timestamp} | {event_type} | {details}")
-            if window_title:
-                print(f"Active Window: {app_name} - {window_title}")
-            
-            # Store in database
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            
+            # Create events table if it doesn't exist
             cursor.execute('''
-                INSERT INTO events (timestamp, event_type, details, window_title, app_name, context_action)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (timestamp, event_type, details, window_title, app_name, context_action))
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    details TEXT,
+                    window_title TEXT,
+                    app_name TEXT,
+                    context_action TEXT,
+                    timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             conn.commit()
             conn.close()
+            print("✅ Database initialized successfully")
+            
         except Exception as e:
-            print(f"Error logging event: {e}")
+            print(f"❌ Database initialization error: {e}")
+    
+    def log_event(self, event_type, details="", window_title="", app_name="", context_action=""):
+        """Log an event to the database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO events (event_type, details, window_title, app_name, context_action, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (event_type, details, window_title, app_name, context_action, datetime.now().isoformat()))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            print(f"❌ Error logging event: {e}")
+    
+    def get_recent_events(self, limit=100):
+        """Get recent events from database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT event_type, details, window_title, app_name, timestamp, context_action
+                FROM events 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            ''', (limit,))
+            
+            events = cursor.fetchall()
+            conn.close()
+            return events
+            
+        except Exception as e:
+            print(f"❌ Error getting events: {e}")
+            return []
+    
+    def get_app_usage_stats(self):
+        """Get application usage statistics"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT app_name, COUNT(*) as count, 
+                       MIN(timestamp) as first_seen, MAX(timestamp) as last_seen
+                FROM events 
+                WHERE app_name != 'Unknown' AND app_name != ''
+                GROUP BY app_name
+                ORDER BY count DESC
+            ''')
+            
+            stats = cursor.fetchall()
+            conn.close()
+            return stats
+            
+        except Exception as e:
+            print(f"❌ Error getting app stats: {e}")
+            return []
