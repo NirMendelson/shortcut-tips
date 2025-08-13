@@ -137,28 +137,24 @@ class ShortcutCoachGUI(QMainWindow):
         
         # Live events table
         self.events_table = QTableWidget()
-        self.events_table.setColumnCount(5)
+        self.events_table.setColumnCount(3)
         self.events_table.setHorizontalHeaderLabels([
-            "Time", "Details", "App", "Window", "Context Action"
+            "Time", "Details", "App"
         ])
         
         # Set column widths
         self.events_table.setColumnWidth(0, 150)  # Time
-        self.events_table.setColumnWidth(1, 200)  # Details
-        self.events_table.setColumnWidth(2, 120)  # App
-        self.events_table.setColumnWidth(3, 200)  # Window
-        self.events_table.setColumnWidth(4, 150)  # Context Action
+        self.events_table.setColumnWidth(1, 300)  # Details
+        self.events_table.setColumnWidth(2, 200)  # App
         
         # Start with empty table showing "No data yet"
         self.events_table.setRowCount(1)
         self.events_table.setItem(0, 0, QTableWidgetItem("No data yet"))
         self.events_table.setItem(0, 1, QTableWidgetItem(""))
         self.events_table.setItem(0, 2, QTableWidgetItem(""))
-        self.events_table.setItem(0, 3, QTableWidgetItem(""))
-        self.events_table.setItem(0, 4, QTableWidgetItem(""))
         
         # Live tracker label
-        layout.addWidget(QLabel("Live Event Tracker - Data updates automatically as you use your computer"))
+        layout.addWidget(QLabel("Live Event Tracker - Current Session Only - Shows Time, Details, and App - Updates automatically every second"))
         layout.addWidget(self.events_table)
         
         self.tab_widget.addTab(tab, "🔴 Live Tracker")
@@ -303,26 +299,41 @@ Start clicking, typing, and switching between apps to see insights appear!
             print("🔄 Live Tracker now updating automatically every second!")
             
     def refresh_live_data(self):
-        """Manually refresh the live data display"""
+        """Manually refresh the live data display - only show current session events"""
         try:
             conn = sqlite3.connect('shortcuts.db')
             cursor = conn.cursor()
             
-            # Get recent events
-            cursor.execute("""
-                SELECT event_type, details, window_title, app_name, timestamp, context_action
-                FROM events 
-                ORDER BY timestamp DESC 
-                LIMIT 20
-            """)
+            # Get recent events from current session only
+            if hasattr(self, 'session_start_time') and self.session_start_time:
+                cursor.execute("""
+                    SELECT event_type, details, app_name, timestamp
+                    FROM events 
+                    WHERE timestamp > ?
+                    ORDER BY timestamp DESC 
+                    LIMIT 20
+                """, (self.session_start_time,))
+            else:
+                # Fallback: get all recent events if no session time
+                cursor.execute("""
+                    SELECT event_type, details, app_name, timestamp
+                    FROM events 
+                    ORDER BY timestamp DESC 
+                    LIMIT 20
+                """)
+            
             events = cursor.fetchall()
             conn.close()
             
             # Update the table safely
             if events:
                 self.update_events_table(events)
+                # Debug: show how many events are from current session
+                if hasattr(self, 'session_start_time') and self.session_start_time:
+                    print(f"🔄 Live Tracker updated with {len(events)} current session events")
             else:
                 self.update_events_table([]) # Ensure table shows "No data yet"
+                print("🔄 Live Tracker: No current session events yet")
             
         except Exception as e:
             print(f"❌ Error refreshing data: {e}")
@@ -335,7 +346,7 @@ Start clicking, typing, and switching between apps to see insights appear!
             
         # Clear the "No data yet" row and add real data
         self.events_table.setRowCount(len(events))
-        for i, (event_type, details, window_title, app_name, timestamp, context_action) in enumerate(events):
+        for i, (event_type, details, app_name, timestamp) in enumerate(events):
             # Format timestamp
             try:
                 dt = datetime.fromisoformat(timestamp)
@@ -346,8 +357,6 @@ Start clicking, typing, and switching between apps to see insights appear!
             self.events_table.setItem(i, 0, QTableWidgetItem(time_str))
             self.events_table.setItem(i, 1, QTableWidgetItem(str(details)))
             self.events_table.setItem(i, 2, QTableWidgetItem(app_name))
-            self.events_table.setItem(i, 3, QTableWidgetItem(window_title))
-            self.events_table.setItem(i, 4, QTableWidgetItem(context_action))
             
     def update_app_usage_table(self, app_usage):
         """Update the app usage table"""
@@ -481,6 +490,10 @@ class ShortcutCoach:
         self.last_active_window_time = 0
         self.window_cache_duration = 0.5  # Cache for 500ms
         
+        # Session tracking - only show events from current session
+        self.session_start_time = datetime.now().isoformat()
+        print(f"🕐 Session started at: {self.session_start_time}")
+        
         # Add deduplication system to prevent double logging
         self.last_events = {}  # Track last event of each type
         self.event_cooldown = 1.0  # 1 second cooldown between same event types
@@ -495,10 +508,12 @@ class ShortcutCoach:
         
         # Initialize GUI in main thread
         self.gui = ShortcutCoachGUI(self)
+        self.gui.session_start_time = self.session_start_time  # Pass session time to GUI
         self.gui.show()
         print("📊 GUI initialized and visible!")
         print("🔄 Live Tracker will update automatically every second")
         print("🔄 Deduplication system active - preventing double logging")
+        print(f"🕐 Only events after {self.session_start_time} will be displayed")
         
         self.running = False
         
