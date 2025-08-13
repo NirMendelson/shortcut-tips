@@ -1,6 +1,7 @@
 import time
 from pywinauto import Desktop
 import psutil
+from shortcut_manager import ShortcutManager
 
 class ActionDetector:
     """Detects user actions and suggests appropriate shortcuts"""
@@ -8,6 +9,9 @@ class ActionDetector:
     def __init__(self, notification_system):
         self.notification_system = notification_system
         self.ui_desk = Desktop(backend="uia")
+        
+        # Initialize central shortcut manager
+        self.shortcut_manager = ShortcutManager()
         
         # Excel cell tracking
         self.current_excel_cell = None
@@ -27,39 +31,55 @@ class ActionDetector:
         
         # Focus on Excel actions for now
         if app_name.lower() == self.excel_process_name.lower():
-            self.detect_excel_action(x, y)
+            result = self.detect_excel_action(x, y)
+            return result
+        else:
+            return None
     
     def detect_excel_action(self, x, y):
         """Detect Excel-specific actions"""
         try:
+            
             # Get element at click point
             element = self.ui_desk.from_point(x, y)
             element_info = element.element_info
+            
+            shortcut_info = None
             
             # Check if this is a cell click
             if self.is_excel_cell(element_info):
                 cell_address = self.extract_cell_address(element_info)
                 if cell_address:
-                    self.handle_cell_selection(cell_address, x, y)
+                    shortcut_info = self.handle_cell_selection(cell_address, x, y)
+                    # If we got shortcut info from cell selection, return it immediately
+                    if shortcut_info:
+                        return shortcut_info
+                else:
+                    pass # No debug print
+            else:
+                pass # No debug print
             
             # Check if this is a column header click
-            elif self.is_excel_column_header(element_info):
-                self.handle_column_header_click(element_info)
+            if self.is_excel_column_header(element_info):
+                shortcut_info = self.handle_column_header_click(element_info)
             
             # Check if this is a row header click
             elif self.is_excel_row_header(element_info):
-                self.handle_row_header_click(element_info)
+                shortcut_info = self.handle_row_header_click(element_info)
             
             # Check if this is a sheet tab click
             elif self.is_excel_sheet_tab(element_info):
-                self.handle_sheet_tab_click(element_info)
+                shortcut_info = self.handle_sheet_tab_click(element_info)
             
             # Check if this is a button/ribbon click
             elif self.is_excel_button(element_info):
-                self.handle_button_click(element_info)
+                shortcut_info = self.handle_button_click(element_info)
+            
+            return shortcut_info
                 
         except Exception as e:
             print(f"Error detecting Excel action: {e}")
+            return None
     
     def is_excel_cell(self, element_info):
         """Check if the clicked element is an Excel cell"""
@@ -166,11 +186,19 @@ class ActionDetector:
         print(f"📍 Excel Cell Selected: {cell_info['address']} (Row {cell_info['row']}, Col {cell_info['col']})")
         
         # Check if this is a boundary jump that suggests Ctrl + Up
+        shortcut_info = None
         if old_cell and old_row and old_row > 1:
             if self.is_boundary_jump(old_row, cell_info['row']):
-                self.suggest_ctrl_up_shortcut(old_cell, cell_info['address'])
+                shortcut_info = self.suggest_ctrl_up_shortcut(old_cell, cell_info['address'])
+            else:
+                pass # No debug print
+        else:
+            pass # No debug print
         
         self.last_cell_click_time = current_time
+        
+        # Return the shortcut info if we found one
+        return shortcut_info
     
     def is_boundary_jump(self, old_row, new_row):
         """Check if user jumped from data cell to boundary (suggesting Ctrl + Up)"""
@@ -181,20 +209,26 @@ class ActionDetector:
     
     def suggest_ctrl_up_shortcut(self, from_cell, to_cell):
         """Show a tip: Ctrl + Up Arrow goes to the first row."""
+        
         message = "Use Ctrl + Up Arrow to go to the first row"
-        print(message)
-
+        
+        # Get shortcut info from central manager
+        shortcut_info = ("Ctrl + ↑", "Go to the first row")
+        
         # Send notification
         self.notification_system.suggest_shortcut(
             "Go to the first row",
-            "Ctrl + Up Arrow"
+            "Ctrl + ↑"
         )
+        
+        # Return shortcut info so it can be logged by the caller
+        return shortcut_info
 
     
     def handle_button_click(self, element_info):
         """Handle Excel button clicks (this is already handled in main.py)"""
         # This is handled by the main UI detection system
-        pass
+        return None
 
     def handle_column_header_click(self, element_info):
         """Handle when user clicks on an Excel column header"""
@@ -205,6 +239,9 @@ class ActionDetector:
             f"Select entire column",
             "Ctrl + Space"
         )
+        
+        # Return shortcut info so it can be logged by the caller
+        return ("Ctrl + Space", "Select entire column")
     
     def handle_row_header_click(self, element_info):
         """Handle when user clicks on an Excel row header"""
@@ -215,6 +252,9 @@ class ActionDetector:
             f"Select entire row",
             "Shift + Space"
         )
+        
+        # Return shortcut info so it can be logged by the caller
+        return ("Shift + Space", "Select entire row")
     
     def handle_sheet_tab_click(self, element_info):
         """Handle when user clicks on an Excel sheet tab"""
@@ -225,6 +265,9 @@ class ActionDetector:
             "Switch between worksheets",
             "Ctrl + Page Up/Page Down"
         )
+        
+        # Return shortcut info so it can be logged by the caller
+        return ("Ctrl + Page Up/Page Down", "Switch between worksheets")
     
     def should_process_action(self):
         """Check if we should process this action (avoid duplicates)"""

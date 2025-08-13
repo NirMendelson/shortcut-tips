@@ -8,6 +8,7 @@ import time
 from pywinauto import Desktop
 import psutil
 from datetime import datetime
+from shortcut_manager import ShortcutManager
 
 class UIAutomationManager:
     """Manages Windows UI Automation for detecting UI elements"""
@@ -17,6 +18,9 @@ class UIAutomationManager:
         self.ui_desk = Desktop(backend="uia")
         self.last_click_time = 0
         self.click_cooldown = 0.1  # 100ms cooldown between clicks
+        
+        # Initialize central shortcut manager
+        self.shortcut_manager = ShortcutManager()
         
         # Cache for active window info
         self.last_active_window = None
@@ -109,100 +113,8 @@ class UIAutomationManager:
             }
     
     def get_shortcut_suggestion(self, element_info):
-        """Get shortcut suggestion based on clicked element"""
-        if "error" in element_info:
-            return None
-        
-        element_name = element_info["name"].lower()
-        element_type = element_info["type"].lower()
-        app_name = element_info["app_name"].lower()
-        
-        # Excel shortcuts
-        if "excel" in app_name:
-            if "save" in element_name:
-                return "Ctrl + S", "Save"
-            elif "new" in element_name:
-                return "Ctrl + N", "New"
-            elif "open" in element_name:
-                return "Ctrl + O", "Open"
-            elif "bold" in element_name:
-                return "Ctrl + B", "Bold"
-            elif "italic" in element_name:
-                return "Ctrl + I", "Italic"
-            elif "underline" in element_name:
-                return "Ctrl + U", "Underline"
-            elif "copy" in element_name:
-                return "Ctrl + C", "Copy"
-            elif "paste" in element_name:
-                return "Ctrl + V", "Paste"
-            elif "cut" in element_name:
-                return "Ctrl + X", "Cut"
-            elif "undo" in element_name:
-                return "Ctrl + Z", "Undo"
-            elif "redo" in element_name:
-                return "Ctrl + Y", "Redo"
-        
-        # Cursor/VS Code shortcuts
-        elif "cursor" in app_name or "code" in app_name:
-            if "save" in element_name:
-                return "Ctrl + S", "Save"
-            elif "new file" in element_name:
-                return "Ctrl + N", "New File"
-            elif "open file" in element_name:
-                return "Ctrl + O", "Open File"
-            elif "copy" in element_name:
-                return "Ctrl + C", "Copy"
-            elif "paste" in element_name:
-                return "Ctrl + V", "Paste"
-            elif "cut" in element_name:
-                return "Ctrl + X", "Cut"
-            elif "undo" in element_name:
-                return "Ctrl + Z", "Undo"
-            elif "redo" in element_name:
-                return "Ctrl + Y", "Redo"
-            elif "find" in element_name:
-                return "Ctrl + F", "Find"
-            elif "replace" in element_name:
-                return "Ctrl + H", "Replace"
-        
-        # Chrome shortcuts
-        elif "chrome" in app_name:
-            if "new tab" in element_name:
-                return "Ctrl + T", "New Tab"
-            elif "close tab" in element_name:
-                return "Ctrl + W", "Close Tab"
-            elif "refresh" in element_name:
-                return "F5", "Refresh"
-            elif "back" in element_name:
-                return "Alt + ←", "Go Back"
-            elif "forward" in element_name:
-                return "Alt + →", "Go Forward"
-            elif "bookmark" in element_name:
-                return "Ctrl + D", "Bookmark"
-        
-        # Generic shortcuts for any application - but be more specific to avoid false positives
-        if "copy" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + C", "Copy"
-        elif "paste" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + V", "Paste"
-        elif "cut" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + X", "Cut"
-        elif "save" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + S", "Save"
-        elif "new" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + N", "New"
-        elif "open" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + O", "Open"
-        elif "undo" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + Z", "Undo"
-        elif "redo" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + Y", "Redo"
-        elif "find" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + F", "Find"
-        elif "print" in element_name and "shortcut" not in element_name.lower():
-            return "Ctrl + P", "Print"
-        
-        return None
+        """Get shortcut suggestion using central shortcut manager"""
+        return self.shortcut_manager.get_shortcut_suggestion(element_info)
     
     def should_log_event(self, event_type, details, app_name=None):
         """Check if we should log this event (prevent duplicates)"""

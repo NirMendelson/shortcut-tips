@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont, QPalette, QColor
+from shortcut_manager import ShortcutManager
 
 class DataCollector:
     """Simple data collector for the GUI"""
@@ -52,6 +53,9 @@ class ShortcutCoachGUI(QMainWindow):
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.refresh_live_data)
         self.refresh_timer.start(1000)  # Refresh every 1000ms (1 second)
+        
+        # Initialize central shortcut manager for consistent shortcut mapping
+        self.shortcut_manager = ShortcutManager()
         
     def set_dark_theme(self):
         """Apply modern dark theme"""
@@ -373,10 +377,22 @@ class ShortcutCoachGUI(QMainWindow):
                     context_action,
                     COUNT(*) as frequency
                 FROM events 
-                WHERE (context_action LIKE '%copy%' 
+                WHERE (context_action LIKE 'SHORTCUT_%' 
+                   OR context_action LIKE '%copy%' 
                    OR context_action LIKE '%paste%'
                    OR context_action LIKE '%cut%'
-                   OR context_action LIKE '%save%')
+                   OR context_action LIKE '%save%'
+                   OR context_action LIKE '%new%'
+                   OR context_action LIKE '%open%'
+                   OR context_action LIKE '%undo%'
+                   OR context_action LIKE '%redo%'
+                   OR context_action LIKE '%find%'
+                   OR context_action LIKE '%print%'
+                   OR context_action LIKE '%arrow%'
+                   OR context_action LIKE '%space%'
+                   OR context_action LIKE '%tab%'
+                   OR context_action LIKE '%f5%'
+                   OR context_action LIKE '%alt%')
                    AND timestamp > ?
                 GROUP BY context_action
                 ORDER BY frequency DESC
@@ -391,38 +407,12 @@ class ShortcutCoachGUI(QMainWindow):
                 action = opp[0] or "Unknown"
                 frequency = opp[1]
                 
-                # Map actions to shortcuts - handle various formats
+                # Map actions to shortcuts using central shortcut manager
                 shortcut = "Unknown"
                 if action:
-                    action_lower = action.lower()
-                    
-                    # Check for exact matches first (most reliable)
-                    if action == "SHORTCUT_CTRL_C":
-                        shortcut = "Ctrl + C"
-                    elif action == "SHORTCUT_CTRL_V":
-                        shortcut = "Ctrl + V"
-                    elif action == "SHORTCUT_CTRL_X":
-                        shortcut = "Ctrl + X"
-                    elif action == "SHORTCUT_CTRL_S":
-                        shortcut = "Ctrl + S"
-                    # Then check for detected actions
-                    elif action == "COPY_DETECTED":
-                        shortcut = "Ctrl + C"
-                    elif action == "PASTE_DETECTED":
-                        shortcut = "Ctrl + V"
-                    elif action == "CUT_DETECTED":
-                        shortcut = "Ctrl + X"
-                    elif action == "SAVE_DETECTED":
-                        shortcut = "Ctrl + S"
-                    # Finally check for partial matches (least reliable)
-                    elif "copy" in action_lower and "shortcut" not in action_lower:
-                        shortcut = "Ctrl + C"
-                    elif "paste" in action_lower and "shortcut" not in action_lower:
-                        shortcut = "Ctrl + V"
-                    elif "cut" in action_lower and "shortcut" not in action_lower:
-                        shortcut = "Ctrl + X"
-                    elif "save" in action_lower and "shortcut" not in action_lower:
-                        shortcut = "Ctrl + S"
+                    # Try to find the shortcut by looking up the database key
+                    # We need to reverse-engineer from the database key to the shortcut
+                    shortcut = self._get_shortcut_from_database_key(action)
                 
                 # Column 0: Shortcut (e.g., "Ctrl + C")
                 self.opportunities_table.setItem(i, 0, QTableWidgetItem(shortcut))
@@ -431,6 +421,48 @@ class ShortcutCoachGUI(QMainWindow):
                 
         except Exception as e:
             print(f"Error refreshing shortcut opportunities: {e}")
+    
+    def _get_shortcut_from_database_key(self, database_key):
+        """Convert database key back to human-readable shortcut"""
+        if not database_key:
+            return "Unknown"
+        
+        # Reverse mapping from database keys to shortcuts
+        reverse_mapping = {
+            "SHORTCUT_CTRL_C": "Ctrl + C",
+            "SHORTCUT_CTRL_V": "Ctrl + V",
+            "SHORTCUT_CTRL_X": "Ctrl + X",
+            "SHORTCUT_CTRL_S": "Ctrl + S",
+            "SHORTCUT_CTRL_N": "Ctrl + N",
+            "SHORTCUT_CTRL_O": "Ctrl + O",
+            "SHORTCUT_CTRL_Z": "Ctrl + Z",
+            "SHORTCUT_CTRL_Y": "Ctrl + Y",
+            "SHORTCUT_CTRL_F": "Ctrl + F",
+            "SHORTCUT_CTRL_H": "Ctrl + H",
+            "SHORTCUT_CTRL_A": "Ctrl + A",
+            "SHORTCUT_CTRL_P": "Ctrl + P",
+            "SHORTCUT_CTRL_SLASH": "Ctrl + /",
+            "SHORTCUT_CTRL_ARROW": "Ctrl + Arrow Keys",
+            "SHORTCUT_CTRL_ARROW_UP": "Ctrl + ↑",
+            "SHORTCUT_CTRL_ARROW_DOWN": "Ctrl + ↓",
+            "SHORTCUT_CTRL_ARROW_LEFT": "Ctrl + ←",
+            "SHORTCUT_CTRL_ARROW_RIGHT": "Ctrl + →",
+            "SHORTCUT_CTRL_SPACE": "Ctrl + Space",
+            "SHORTCUT_SHIFT_SPACE": "Shift + Space",
+            "SHORTCUT_CTRL_PAGE_UP_DOWN": "Ctrl + Page Up/Page Down",
+            "SHORTCUT_F5": "F5",
+            "SHORTCUT_ALT_LEFT": "Alt + ←",
+            "SHORTCUT_ALT_RIGHT": "Alt + →",
+            "SHORTCUT_TAB": "Tab",
+            "SHORTCUT_SHIFT_TAB": "Shift + Tab",
+            # Legacy support for old database entries
+            "COPY_DETECTED": "Ctrl + C",
+            "PASTE_DETECTED": "Ctrl + V",
+            "CUT_DETECTED": "Ctrl + X",
+            "SAVE_DETECTED": "Ctrl + S"
+        }
+        
+        return reverse_mapping.get(database_key, "Unknown")
             
     def generate_ai_suggestions(self):
         """Generate new AI suggestions based on real data"""

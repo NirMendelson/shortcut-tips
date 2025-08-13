@@ -16,6 +16,7 @@ from window_monitor import WindowMonitor
 from action_detector import ActionDetector
 from gui_manager import ShortcutCoachGUI
 from ui_automation_manager import UIAutomationManager
+from shortcut_manager import ShortcutManager
 
 class ShortcutCoach:
     """Main Shortcut Coach system that coordinates all components"""
@@ -38,6 +39,9 @@ class ShortcutCoach:
         
         # Initialize UI automation manager
         self.ui_manager = UIAutomationManager(self.notification_system)
+        
+        # Initialize central shortcut manager
+        self.shortcut_manager = ShortcutManager()
         
         # Initialize GUI
         self.gui = ShortcutCoachGUI(self)
@@ -139,16 +143,17 @@ class ShortcutCoach:
                         result = self.ui_manager.get_shortcut_suggestion(element_info)
                         if result:
                             shortcut, description = result
-                            print(f"💡 Use {shortcut} for {description}")
                             self.notification_system.suggest_shortcut(description, shortcut)
+                            # Get database key from central shortcut manager
+                            db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
                             self.log_event("Shortcut Suggested", f"{shortcut} for {description}", 
-                                         context_action=f"SHORTCUT_{shortcut.replace(' + ', '_').upper()}")
+                                         context_action=db_key)
                         else:
                             print(f"ℹ️ No shortcut available for {element_name}")
                         
                         # Also detect actions (like Excel cell navigation)
-                        self.action_detector.detect_action(x, y, app_name)
-                        
+                        shortcut_info = self.action_detector.detect_action(x, y, app_name)
+
                         # Log the context menu click with proper app name
                         self.log_event(
                             event_type="Context Menu Click",
@@ -156,8 +161,13 @@ class ShortcutCoach:
                             app_name=app_name,
                             context_action="CONTEXT_MENU_CLICK"
                         )
-                    else:
-                        print(f"🖱️ Context Menu Click at ({x}, {y}) - Could not detect UI element")
+
+                        # If action detector found a shortcut, log it
+                        if shortcut_info:
+                            shortcut, description = shortcut_info
+                            db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
+                            self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
+                                         context_action=db_key)
                 
                 self.input_monitor.context_menu_active = False
             else:
@@ -176,16 +186,17 @@ class ShortcutCoach:
                         result = self.ui_manager.get_shortcut_suggestion(element_info)
                         if result:
                             shortcut, description = result
-                            print(f"💡 Use {shortcut} for {description}")
                             self.notification_system.suggest_shortcut(description, shortcut)
+                            # Get database key from central shortcut manager
+                            db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
                             self.log_event("Shortcut Suggested", f"{shortcut} for {description}", 
-                                         context_action=f"SHORTCUT_{shortcut.replace(' + ', '_').upper()}")
+                                         context_action=db_key)
                         else:
                             print(f"ℹ️ No shortcut available for {element_name}")
                         
                         # Also detect actions (like Excel cell navigation)
-                        self.action_detector.detect_action(x, y, app_name)
-                        
+                        shortcut_info = self.action_detector.detect_action(x, y, app_name)
+
                         # Log the UI element click with proper app name
                         self.log_event(
                             event_type="UI Element Click",
@@ -193,8 +204,13 @@ class ShortcutCoach:
                             app_name=app_name,
                             context_action="UI_CLICK"
                         )
-                    else:
-                        print(f"🖱️ Clicked at ({x}, {y}) - Could not detect UI element")
+
+                        # If action detector found a shortcut, log it
+                        if shortcut_info:
+                            shortcut, description = shortcut_info
+                            db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
+                            self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
+                                         context_action=db_key)
                 
                 # Now we log UI element clicks with proper app names
                 
