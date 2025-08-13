@@ -165,6 +165,8 @@ class ShortcutCoach:
                         # If action detector found a shortcut, log it
                         if shortcut_info:
                             shortcut, description = shortcut_info
+                            # Send notification for action detector shortcuts
+                            self.notification_system.suggest_shortcut(description, shortcut)
                             db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
                             self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
                                          context_action=db_key)
@@ -208,6 +210,8 @@ class ShortcutCoach:
                         # If action detector found a shortcut, log it
                         if shortcut_info:
                             shortcut, description = shortcut_info
+                            # Send notification for action detector shortcuts
+                            self.notification_system.suggest_shortcut(description, shortcut)
                             db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
                             self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
                                          context_action=db_key)

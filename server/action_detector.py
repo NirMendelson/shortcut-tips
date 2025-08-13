@@ -23,6 +23,16 @@ class ActionDetector:
         # Track if we're in Excel
         self.in_excel = False
         self.excel_process_name = "EXCEL.EXE"
+        
+        # F2 shortcut detection - track double clicks on same cell
+        self.last_cell_click = None
+        self.last_cell_click_timestamp = 0
+        self.f2_double_click_threshold = 2.0  # 2 seconds threshold for double click (more user-friendly)
+        
+        # Track repeated actions for Ctrl + Y suggestions
+        self.last_action = None
+        self.last_action_timestamp = 0
+        self.repeat_action_threshold = 10.0  # 10 seconds threshold for repeat action
     
     def detect_action(self, x, y, app_name):
         """Detect what action the user performed and suggest shortcuts"""
@@ -73,7 +83,17 @@ class ActionDetector:
             
             # Check if this is a button/ribbon click
             elif self.is_excel_button(element_info):
-                shortcut_info = self.handle_button_click(element_info)
+                # Check specifically for redo/repeat button
+                if "redo" in element_info.name.lower() or "repeat" in element_info.name.lower():
+                    shortcut_info = self.handle_redo_button_click(element_info)
+                # Check for formatting buttons that should show shortcuts immediately
+                elif any(format_btn in element_info.name.lower() for format_btn in ['bold', 'italic', 'underline']):
+                    shortcut_info = self.handle_formatting_button_click(element_info)
+                    # Return immediately to prevent repeated action logic from running
+                    return shortcut_info
+                else:
+                    # Check for repeated actions (like fill color, formatting, etc.)
+                    shortcut_info = self.handle_repeated_action(element_info)
             
             return shortcut_info
                 
@@ -138,7 +158,8 @@ class ActionDetector:
             name = element_info.name.lower()
             # Common Excel button names
             excel_buttons = ['save', 'new', 'open', 'bold', 'italic', 'underline', 
-                           'copy', 'paste', 'cut', 'undo', 'redo']
+                           'copy', 'paste', 'cut', 'undo', 'redo', 'repeat',
+                           'fill', 'colour', 'color', 'paint', 'format']
             return any(button in name for button in excel_buttons)
         except:
             return False
@@ -190,10 +211,23 @@ class ActionDetector:
         if old_cell and old_row and old_row > 1:
             if self.is_boundary_jump(old_row, cell_info['row']):
                 shortcut_info = self.suggest_ctrl_up_shortcut(old_cell, cell_info['address'])
-            else:
-                pass # No debug print
-        else:
-            pass # No debug print
+        
+        # Check if this is a double-click on the same cell (suggest F2) - PRIORITY OVER BOUNDARY JUMP
+        time_diff = current_time - self.last_cell_click_timestamp
+        print(f"🔍 F2 Debug: last_cell_click={self.last_cell_click}, current_cell={cell_info['address']}, time_diff={time_diff:.3f}s, threshold={self.f2_double_click_threshold}")
+        
+        if (self.last_cell_click == cell_info['address'] and 
+            time_diff < self.f2_double_click_threshold):
+            # F2 detection takes priority over boundary jump
+            shortcut_info = self.suggest_f2_shortcut(cell_info['address'])
+            print(f"🔍 F2 shortcut detected for double-click on {cell_info['address']}")
+        elif shortcut_info is None:
+            # Only show boundary jump if F2 wasn't detected
+            print(f"🔍 No F2 detected, boundary jump shortcut: {shortcut_info}")
+        
+        # Update tracking for next potential double-click
+        self.last_cell_click = cell_info['address']
+        self.last_cell_click_timestamp = current_time
         
         self.last_cell_click_time = current_time
         
@@ -210,35 +244,91 @@ class ActionDetector:
     def suggest_ctrl_up_shortcut(self, from_cell, to_cell):
         """Show a tip: Ctrl + Up Arrow goes to the first row."""
         
-        message = "Use Ctrl + Up Arrow to go to the first row"
-        
         # Get shortcut info from central manager
         shortcut_info = ("Ctrl + ↑", "Go to the first row")
-        
-        # Send notification
-        self.notification_system.suggest_shortcut(
-            "Go to the first row",
-            "Ctrl + ↑"
-        )
         
         # Return shortcut info so it can be logged by the caller
         return shortcut_info
 
+    def suggest_f2_shortcut(self, cell_address):
+        """Show a tip: F2 puts the cursor at the end of cell content."""
+        
+        # Get shortcut info from central manager
+        shortcut_info = ("F2", "Edit cell content")
+        
+        # Return shortcut info so it can be logged by the caller
+        return shortcut_info
+
+    def suggest_ctrl_y_shortcut(self, action_name):
+        """Show a tip: Ctrl + Y repeats the last action."""
+        
+        # Get shortcut info from central manager
+        shortcut_info = ("Ctrl + Y", "Redo/Repeat action")
+        
+        # Return shortcut info so it can be logged by the caller
+        return shortcut_info
     
     def handle_button_click(self, element_info):
         """Handle Excel button clicks (this is already handled in main.py)"""
         # This is handled by the main UI detection system
         return None
 
+    def handle_formatting_button_click(self, element_info):
+        """Handle when user clicks on Excel formatting buttons (bold, italic, underline)"""
+        button_name = element_info.name.lower()
+        
+        # Track this action for potential Ctrl + Y suggestions later
+        current_time = time.time()
+        self.last_action = button_name
+        self.last_action_timestamp = current_time
+        
+        if "bold" in button_name:
+            shortcut_info = ("Ctrl + B", "Bold")
+        elif "italic" in button_name:
+            shortcut_info = ("Ctrl + I", "Italic")
+        elif "underline" in button_name:
+            shortcut_info = ("Ctrl + U", "Underline")
+        else:
+            return None
+        
+        print(f"📍 Excel Formatting Button: {element_info.name} → {shortcut_info[0]}")
+        return shortcut_info
+
+    def handle_redo_button_click(self, element_info):
+        """Handle when user clicks on Excel redo/repeat button"""
+        print(f"📍 Excel Redo Button Selected: {element_info.name}")
+        
+        # Return shortcut info so it can be logged by the caller
+        return ("Ctrl + Y", "Redo/Repeat action")
+
+    def handle_repeated_action(self, element_info):
+        """Handle when user clicks on Excel buttons and check for repeated actions"""
+        current_time = time.time()
+        action_name = element_info.name
+        
+        print(f"📍 Excel Button Clicked: {action_name}")
+        
+        # Check if this is the same action as before (within threshold)
+        if (self.last_action == action_name and 
+            current_time - self.last_action_timestamp < self.repeat_action_threshold):
+            
+            print(f"🔍 Repeated action detected: {action_name}")
+            shortcut_info = self.suggest_ctrl_y_shortcut(action_name)
+            
+            # Reset tracking after suggesting
+            self.last_action = None
+            self.last_action_timestamp = 0
+            
+            return shortcut_info
+        else:
+            # Update tracking for next potential repeat
+            self.last_action = action_name
+            self.last_action_timestamp = current_time
+            return None
+
     def handle_column_header_click(self, element_info):
         """Handle when user clicks on an Excel column header"""
         print(f"📍 Excel Column Header Selected: {element_info.name}")
-        message = f"💡 Use Ctrl + Space to select the entire column"
-        print(message)
-        self.notification_system.suggest_shortcut(
-            f"Select entire column",
-            "Ctrl + Space"
-        )
         
         # Return shortcut info so it can be logged by the caller
         return ("Ctrl + Space", "Select entire column")
@@ -246,12 +336,6 @@ class ActionDetector:
     def handle_row_header_click(self, element_info):
         """Handle when user clicks on an Excel row header"""
         print(f"📍 Excel Row Header Selected: {element_info.name}")
-        message = f"💡 Use Shift + Space to select the entire row {element_info.name}"
-        print(message)
-        self.notification_system.suggest_shortcut(
-            f"Select entire row",
-            "Shift + Space"
-        )
         
         # Return shortcut info so it can be logged by the caller
         return ("Shift + Space", "Select entire row")
@@ -259,12 +343,6 @@ class ActionDetector:
     def handle_sheet_tab_click(self, element_info):
         """Handle when user clicks on an Excel sheet tab"""
         print(f"📍 Excel Sheet Tab Selected: {element_info.name}")
-        message = "💡 Use Ctrl + Page Up/Page Down to switch between worksheets"
-        print(message)
-        self.notification_system.suggest_shortcut(
-            "Switch between worksheets",
-            "Ctrl + Page Up/Page Down"
-        )
         
         # Return shortcut info so it can be logged by the caller
         return ("Ctrl + Page Up/Page Down", "Switch between worksheets")

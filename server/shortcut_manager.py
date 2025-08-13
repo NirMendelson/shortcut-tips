@@ -10,19 +10,14 @@ class ShortcutManager:
     def __init__(self):
         # Excel-specific shortcuts
         self.excel_shortcuts = {
-            "save": ("Ctrl + S", "Save"),
-            "new": ("Ctrl + N", "New"),
-            "open": ("Ctrl + O", "Open"),
-            "bold": ("Ctrl + B", "Bold"),
-            "italic": ("Ctrl + I", "Italic"),
-            "underline": ("Ctrl + U", "Underline"),
             "copy": ("Ctrl + C", "Copy"),
             "paste": ("Ctrl + V", "Paste"),
             "cut": ("Ctrl + X", "Cut"),
+            "save": ("Ctrl + S", "Save"),
+            "new": ("Ctrl + N", "New workbook"),
+            "open": ("Ctrl + O", "Open workbook"),
             "undo": ("Ctrl + Z", "Undo"),
-            "redo": ("Ctrl + Y", "Redo"),
-            "cell_navigation": ("Ctrl + Arrow Keys", "Jump to edge of data region"),
-            "select_all": ("Ctrl + A", "Select All"),
+            "redo": ("Ctrl + Y", "Redo/Repeat action"),
             "find": ("Ctrl + F", "Find"),
             "replace": ("Ctrl + H", "Replace"),
             "print": ("Ctrl + P", "Print"),
@@ -30,7 +25,11 @@ class ShortcutManager:
             "arrow_up": ("Ctrl + ↑", "Move to top of data"),
             "arrow_down": ("Ctrl + ↓", "Move to bottom of data"),
             "arrow_left": ("Ctrl + ←", "Move to left edge of data"),
-            "arrow_right": ("Ctrl + →", "Move to right edge of data")
+            "arrow_right": ("Ctrl + →", "Move to right edge of data"),
+            "edit_cell": ("F2", "Edit cell content"),
+            "bold": ("Ctrl + B", "Bold"),
+            "italic": ("Ctrl + I", "Italic"),
+            "underline": ("Ctrl + U", "Underline")
         }
         
         # Cursor/VS Code shortcuts
@@ -155,7 +154,7 @@ class ShortcutManager:
         # Map common shortcuts to database keys
         shortcut_mapping = {
             "Ctrl + C": "SHORTCUT_CTRL_C",
-            "Ctrl + V": "SHORTCUT_CTRL_V", 
+            "Ctrl + V": "SHORTCUT_CTRL_V",
             "Ctrl + X": "SHORTCUT_CTRL_X",
             "Ctrl + S": "SHORTCUT_CTRL_S",
             "Ctrl + N": "SHORTCUT_CTRL_N",
@@ -164,9 +163,11 @@ class ShortcutManager:
             "Ctrl + Y": "SHORTCUT_CTRL_Y",
             "Ctrl + F": "SHORTCUT_CTRL_F",
             "Ctrl + H": "SHORTCUT_CTRL_H",
-            "Ctrl + A": "SHORTCUT_CTRL_A",
             "Ctrl + P": "SHORTCUT_CTRL_P",
-            "Ctrl + /": "SHORTCUT_CTRL_SLASH",
+            "Ctrl + A": "SHORTCUT_CTRL_A",
+            "Ctrl + B": "SHORTCUT_CTRL_B",
+            "Ctrl + I": "SHORTCUT_CTRL_I",
+            "Ctrl + U": "SHORTCUT_CTRL_U",
             "Ctrl + Arrow Keys": "SHORTCUT_CTRL_ARROW",
             "Ctrl + ↑": "SHORTCUT_CTRL_ARROW_UP",
             "Ctrl + ↓": "SHORTCUT_CTRL_ARROW_DOWN",
@@ -179,7 +180,8 @@ class ShortcutManager:
             "Alt + ←": "SHORTCUT_ALT_LEFT",
             "Alt + →": "SHORTCUT_ALT_RIGHT",
             "Tab": "SHORTCUT_TAB",
-            "Shift + Tab": "SHORTCUT_SHIFT_TAB"
+            "Shift + Tab": "SHORTCUT_SHIFT_TAB",
+            "F2": "SHORTCUT_F2"
         }
         
         return shortcut_mapping.get(shortcut, f"SHORTCUT_{shortcut.replace(' + ', '_').replace(' ', '_').upper()}")
