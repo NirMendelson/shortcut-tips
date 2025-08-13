@@ -8,11 +8,12 @@ from pynput.mouse import Button
 class InputMonitor:
     """Handles mouse and keyboard input monitoring"""
     
-    def __init__(self, event_callback, key_press_callback, key_release_callback, context_menu_callback=None):
+    def __init__(self, event_callback, key_press_callback, key_release_callback, context_menu_callback=None, mouse_click_callback=None):
         self.event_callback = event_callback
         self.key_press_callback = key_press_callback
         self.key_release_callback = key_release_callback
         self.context_menu_callback = context_menu_callback
+        self.mouse_click_callback = mouse_click_callback
         self.running = False
         self.mouse_listener = None
         self.keyboard_listener = None
@@ -28,7 +29,7 @@ class InputMonitor:
         self.caps_lock_active = False
         
         # Language tracking
-        self.current_language = "Unknown"
+        self.current_language = None  # Start with None to indicate no language detected yet
         self.last_language_check = 0
         self.language_check_interval = 0.5  # Check every 500ms
     
@@ -67,7 +68,10 @@ class InputMonitor:
                     
                 # Also check Caps Lock state and language periodically
                 self.refresh_caps_lock_state()
-                self.detect_current_language()
+                # Only check language if we haven't detected it yet, or if it's been a while
+                if self.current_language is None or time.time() - self.last_language_check > 5.0:  # Check every 5 seconds max
+                    self.detect_current_language()
+                    self.last_language_check = time.time()
                     
         except Exception as e:
             print(f"Clipboard monitoring error: {e}")
@@ -92,6 +96,13 @@ class InputMonitor:
     
     def on_click(self, x, y, button, pressed):
         """Handle mouse click events with context menu detection"""
+        # Call custom mouse callback if provided
+        if self.mouse_click_callback:
+            try:
+                self.mouse_click_callback(x, y, button, pressed)
+            except Exception as e:
+                print(f"Error in custom mouse callback: {e}")
+        
         if pressed:
             if button == Button.left:
                 # Check if this left-click might be a context menu selection
@@ -362,7 +373,8 @@ class InputMonitor:
                 
                 language_name = language_map.get(layout_id & 0xFFFF, f"Unknown ({hex(layout_id)})")
                 
-                if language_name != self.current_language:
+                # Only report language change if we had a previous language (not on initial detection)
+                if self.current_language is not None and self.current_language != "Unknown" and language_name != self.current_language:
                     old_language = self.current_language
                     self.current_language = language_name
                     print(f"🌍 Language changed from {old_language} to {language_name}")
@@ -370,6 +382,12 @@ class InputMonitor:
                     # Log language change event
                     if hasattr(self, 'event_callback'):
                         self.event_callback("Language Change", f"Switched to {language_name}", context_action="LANGUAGE_SWITCH")
+                else:
+                    # Just set the current language without reporting a change
+                    if self.current_language is None:
+                        print(f"🔍 Initial language detected: {language_name} (not logged)")
+                    self.current_language = language_name
+                    # Don't log initial language detection to database
                     
                 return language_name
                 

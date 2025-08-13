@@ -1,0 +1,6 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+No file should be longer than 300 lines of code. use modular coding, split into few files if its too long
