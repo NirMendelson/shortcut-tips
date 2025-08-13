@@ -164,9 +164,9 @@ class ShortcutCoachGUI(QMainWindow):
         
         # Live data table
         self.live_table = QTableWidget()
-        self.live_table.setColumnCount(5)
+        self.live_table.setColumnCount(4)
         self.live_table.setHorizontalHeaderLabels([
-            "Timestamp", "Event Type", "Details", "Application", "Window"
+            "Timestamp", "Event Type", "Details", "Application"
         ])
         self.live_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.live_table)
@@ -273,7 +273,7 @@ class ShortcutCoachGUI(QMainWindow):
             
             # Get only events that happened AFTER the GUI was opened
             cursor.execute("""
-                SELECT timestamp, event_type, details, app_name, window_title 
+                SELECT timestamp, event_type, details, app_name
                 FROM events 
                 WHERE timestamp > ?
                 ORDER BY timestamp DESC 

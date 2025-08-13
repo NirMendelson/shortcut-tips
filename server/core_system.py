@@ -99,10 +99,20 @@ class ShortcutCoach:
             key_name = str(key)
             print(f"⌨️ Key Press: {key_name}")
             
-            # Log the key press
+            # Get current active window info to get the app name
+            window_info = self.ui_manager.get_active_window_info()
+            app_name = window_info.get("app_name", "Unknown")
+            window_title = window_info.get("title", "Unknown")
+            
+            # Debug output for keyboard events
+            print(f"🔍 Key press in app: {app_name} - {window_title}")
+            
+            # Log the key press with proper app name
             self.log_event(
                 event_type="Key Press",
                 details=key_name,
+                app_name=app_name,
+                window_title=window_title,
                 context_action=f"KEY_{key_name.upper()}"
             )
             
@@ -138,6 +148,14 @@ class ShortcutCoach:
                         
                         # Also detect actions (like Excel cell navigation)
                         self.action_detector.detect_action(x, y, app_name)
+                        
+                        # Log the context menu click with proper app name
+                        self.log_event(
+                            event_type="Context Menu Click",
+                            details=f"Clicked {element_name}",
+                            app_name=app_name,
+                            context_action="CONTEXT_MENU_CLICK"
+                        )
                     else:
                         print(f"🖱️ Context Menu Click at ({x}, {y}) - Could not detect UI element")
                 
@@ -167,10 +185,18 @@ class ShortcutCoach:
                         
                         # Also detect actions (like Excel cell navigation)
                         self.action_detector.detect_action(x, y, app_name)
+                        
+                        # Log the UI element click with proper app name
+                        self.log_event(
+                            event_type="UI Element Click",
+                            details=f"Clicked {element_name}",
+                            app_name=app_name,
+                            context_action="UI_CLICK"
+                        )
                     else:
                         print(f"🖱️ Clicked at ({x}, {y}) - Could not detect UI element")
                 
-                # Don't log here - InputMonitor already logged it
+                # Now we log UI element clicks with proper app names
                 
         except Exception as e:
             print(f"❌ Error handling mouse click: {e}")

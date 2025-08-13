@@ -114,13 +114,15 @@ class InputMonitor:
                         self.context_menu_callback(x, y, button, pressed)
                     self.context_menu_active = False
                 else:
-                    self.event_callback("Left Click", "Left Click")
+                    # Don't log basic left clicks to database - let the UI analysis handle it
+                    # self.event_callback("Left Click", "Left Click")  # Commented out to prevent "Unknown" app logging
                     # Call context menu callback for UI element detection on ALL left clicks
                     if self.context_menu_callback:
                         self.context_menu_callback(x, y, button, pressed)
                     
             elif button == Button.right:
-                self.event_callback("Right Click", "Right Click", context_action="CONTEXT_MENU_OPENED")
+                # Don't log basic right clicks to database - let the UI analysis handle it
+                # self.event_callback("Right Click", "Right Click", context_action="CONTEXT_MENU_OPENED")  # Commented out to prevent "Unknown" app logging
                 self.last_right_click_time = time.time()
                 self.right_click_coords = (x, y)
                 self.context_menu_active = True

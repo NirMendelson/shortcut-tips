@@ -48,17 +48,50 @@ class UIAutomationManager:
             element_info = element.element_info
             rect = element.rectangle()
             
-            # Get process info
-            process_id = element_info.process_id
+            # Get process info with multiple fallback methods
+            app_name = "Unknown"
             try:
-                process = psutil.Process(process_id)
-                app_name = process.name()
+                # Method 1: Try to get from element process ID
+                process_id = element_info.process_id
+                if process_id:
+                    process = psutil.Process(process_id)
+                    app_name = process.name()
+                    if app_name:
+                        app_name = app_name.replace('.exe', '')  # Remove .exe extension
             except:
-                app_name = "Unknown"
+                try:
+                    # Method 2: Try to get from active window
+                    active_window = self.ui_desk.active()
+                    if active_window:
+                        process_id = active_window.process_id()
+                        if process_id:
+                            process = psutil.Process(process_id)
+                            app_name = process.name()
+                            if app_name:
+                                app_name = app_name.replace('.exe', '')  # Remove .exe extension
+                except:
+                    try:
+                        # Method 3: Try to get from foreground window using win32gui
+                        import win32gui
+                        import win32process
+                        hwnd = win32gui.GetForegroundWindow()
+                        if hwnd:
+                            _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+                            if process_id:
+                                process = psutil.Process(process_id)
+                                app_name = process.name()
+                                if app_name:
+                                    app_name = app_name.replace('.exe', '')  # Remove .exe extension
+                    except:
+                        app_name = "Unknown"
+            
+            # Debug output for application detection
+            if app_name != "Unknown":
+                print(f"🔍 Detected app: {app_name} for element: {element_info.name}")
             
             # Return element information
             return {
-                "name": element_info.name,
+                "name": element_info.name or "Unknown Element",
                 "type": str(element_info.control_type),
                 "automation_id": getattr(element_info, "automation_id", None),
                 "class_name": getattr(element_info, "class_name", None),
@@ -188,23 +221,50 @@ class UIAutomationManager:
         """Get current active window information"""
         current_time = time.time()
         
-        # Use cache if still valid
+        # Use cache if still valid (but reduce cache duration for better responsiveness)
         if (self.last_active_window and 
-            current_time - self.last_active_window_time < self.window_cache_duration):
+            current_time - self.last_active_window_time < 0.1):  # Reduced from 0.5s to 0.1s
             return self.last_active_window
         
         try:
-            # Get active window
-            active_window = self.ui_desk.active()
-            window_title = active_window.window_text()
-            
-            # Get process info
-            process_id = active_window.process_id()
+            # Get active window using the correct pywinauto method
             try:
-                process = psutil.Process(process_id)
-                app_name = process.name()
-            except:
+                # Method 1: Try to get from foreground window using win32gui (most reliable)
+                import win32gui
+                import win32process
+                hwnd = win32gui.GetForegroundWindow()
+                print(f"🔍 Debug: Method 1 - HWND: {hwnd}")
+                if hwnd:
+                    _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+                    print(f"🔍 Debug: Method 1 - Process ID: {process_id}")
+                    if process_id:
+                        process = psutil.Process(process_id)
+                        app_name = process.name()
+                        if app_name:
+                            app_name = app_name.replace('.exe', '')  # Remove .exe extension
+                            print(f"🔍 Debug: Method 1 - Success: {app_name}")
+                        else:
+                            print(f"🔍 Debug: Method 1 - Process name is None")
+                    else:
+                        print(f"🔍 Debug: Method 1 - No process ID")
+                else:
+                    print(f"🔍 Debug: Method 1 - No HWND")
+            except Exception as e1:
+                print(f"🔍 Debug: Method 1 - Failed: {e1}")
                 app_name = "Unknown"
+            
+            # Get window title from the same HWND
+            try:
+                if hwnd:
+                    window_title = win32gui.GetWindowText(hwnd)
+                else:
+                    window_title = "Unknown"
+            except:
+                window_title = "Unknown"
+            
+            print(f"🔍 Debug: Active window title: {window_title}")
+            
+            print(f"🔍 Debug: Final app_name: {app_name}")
             
             window_info = {
                 "title": window_title,
@@ -219,6 +279,7 @@ class UIAutomationManager:
             return window_info
             
         except Exception as e:
+            print(f"🔍 Debug: get_active_window_info failed: {e}")
             return {
                 "title": "Unknown",
                 "app_name": "Unknown",
