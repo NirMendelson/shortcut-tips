@@ -52,8 +52,9 @@ class ShortcutManager:
         
         # Chrome shortcuts
         self.browser_shortcuts = {
-            "new_tab": ("Ctrl + T", "New Tab"),
-            "close_tab": ("Ctrl + W", "Close Tab"),
+            "new_tab": ("Ctrl + T", "Open new tab"),
+            "close_tab": ("Ctrl + W", "Close current tab"),
+            "switch_tab": ("Ctrl + Tab", "Switch between tabs"),
             "refresh": ("F5", "Refresh"),
             "back": ("Alt + ←", "Go Back"),
             "forward": ("Alt + →", "Go Forward"),
@@ -61,7 +62,19 @@ class ShortcutManager:
             "find": ("Ctrl + F", "Find"),
             "select_all": ("Ctrl + A", "Select All"),
             "copy": ("Ctrl + C", "Copy"),
-            "paste": ("Ctrl + V", "Paste")
+            "paste": ("Ctrl + V", "Paste"),
+            "tab": ("Ctrl + T", "Open new tab"),
+            "close": ("Ctrl + W", "Close current tab"),
+            "reload": ("F5", "Refresh"),
+            "go_back": ("Alt + ←", "Go Back"),
+            "go_forward": ("Alt + →", "Go Forward"),
+            "x": ("Ctrl + W", "Close current tab"),
+            "close_tab": ("Ctrl + W", "Close current tab"),
+            "tab_close": ("Ctrl + W", "Close current tab"),
+            "close_button": ("Ctrl + W", "Close current tab"),
+            "new": ("Ctrl + T", "Open new tab"),
+            "add": ("Ctrl + T", "Open new tab"),
+            "plus": ("Ctrl + T", "Open new tab")
         }
         
         # Generic shortcuts for any application
@@ -101,7 +114,7 @@ class ShortcutManager:
             return self._check_editor_shortcuts(element_name, element_type)
         
         # Chrome shortcuts
-        elif "chrome" in app_name:
+        elif "chrome" in app_name or "google" in app_name:
             return self._check_browser_shortcuts(element_name, element_type)
         
         # Generic shortcuts for any application
@@ -168,6 +181,10 @@ class ShortcutManager:
             "Ctrl + B": "SHORTCUT_CTRL_B",
             "Ctrl + I": "SHORTCUT_CTRL_I",
             "Ctrl + U": "SHORTCUT_CTRL_U",
+            "Ctrl + T": "SHORTCUT_CTRL_T",
+            "Ctrl + W": "SHORTCUT_CTRL_W",
+            "Ctrl + D": "SHORTCUT_CTRL_D",
+            "Ctrl + Tab": "SHORTCUT_CTRL_TAB",
             "Ctrl + Arrow Keys": "SHORTCUT_CTRL_ARROW",
             "Ctrl + ↑": "SHORTCUT_CTRL_ARROW_UP",
             "Ctrl + ↓": "SHORTCUT_CTRL_ARROW_DOWN",

@@ -125,101 +125,87 @@ class ShortcutCoach:
     
     def on_mouse_click(self, x, y, button, pressed):
         """Handle mouse click events"""
+        if not pressed:
+            return
+        
         try:
-            if pressed and button.name == 'left':
-                # Handle context menu detection
-                if self.input_monitor.context_menu_active:
-                    # Context menu was active, analyze the action
-                    element_info = self.ui_manager.detect_ui_element(x, y)
-                    
-                    # Only process if we got valid element info
-                    if element_info and 'error' not in element_info:
-                        element_name = element_info.get('name', 'Unknown Element')
-                        app_name = element_info.get('app_name', 'Unknown App')
-                        
-                        print(f"🖱️ Context Menu Click: {element_name} in {app_name}")
-                        
-                        # Get shortcut suggestion
-                        result = self.ui_manager.get_shortcut_suggestion(element_info)
-                        if result:
-                            shortcut, description = result
-                            self.notification_system.suggest_shortcut(description, shortcut)
-                            # Get database key from central shortcut manager
-                            db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
-                            self.log_event("Shortcut Suggested", f"{shortcut} for {description}", 
-                                         context_action=db_key)
-                        else:
-                            print(f"ℹ️ No shortcut available for {element_name}")
-                        
-                        # Also detect actions (like Excel cell navigation)
-                        shortcut_info = self.action_detector.detect_action(x, y, app_name)
-
-                        # Log the context menu click with proper app name
-                        self.log_event(
-                            event_type="Context Menu Click",
-                            details=f"Clicked {element_name}",
-                            app_name=app_name,
-                            context_action="CONTEXT_MENU_CLICK"
-                        )
-
-                        # If action detector found a shortcut, log it
-                        if shortcut_info:
-                            shortcut, description = shortcut_info
-                            # Send notification for action detector shortcuts
-                            self.notification_system.suggest_shortcut(description, shortcut)
-                            db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
-                            self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
-                                         context_action=db_key)
+            # Get UI element information
+            element_info = self.ui_manager.detect_ui_element(x, y)
+            if not element_info:
+                return
+            
+            app_name = element_info.get("app_name", "Unknown")
+            element_name = element_info.get("name", "Unknown Element")
+            
+            # Check for Chrome tab switching detection
+            if app_name and "chrome" in app_name.lower():
+                # Get current window info for tab switching detection
+                window_info = self.ui_manager.get_active_window_info()
+                if window_info and window_info.get("title"):
+                    tab_switch_shortcut = self.action_detector.detect_chrome_tab_switch(
+                        app_name, window_info.get("title")
+                    )
+                    if tab_switch_shortcut:
+                        shortcut, description = tab_switch_shortcut
+                        # Send notification for tab switching
+                        self.notification_system.suggest_shortcut(description, shortcut)
+                        # Log the shortcut opportunity
+                        db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
+                        self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
+                                     context_action=db_key)
+                        return  # Don't process further if we detected tab switching
+            
+            # Check for context menu clicks (right-click)
+            if button.name == 'right':
+                # Get shortcut suggestion from UI automation
+                shortcut_info = self.ui_manager.get_shortcut_suggestion(element_info)
                 
-                self.input_monitor.context_menu_active = False
+                if shortcut_info:
+                    shortcut, description = shortcut_info
+                    # Send notification
+                    self.notification_system.suggest_shortcut(description, shortcut)
+                    # Log the shortcut opportunity
+                    db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
+                    self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
+                                 context_action=db_key)
+                
+                # Log the context menu click
+                self.log_event("Context Menu Click", f"Clicked {element_name}",
+                             app_name=app_name, window_title=element_info.get("window_title", ""))
+                print(f"🖱️ Context Menu Click: {element_name} in {app_name}")
+            
+            # Check for regular clicks (left-click)
             else:
-                # Regular left click - detect UI element
-                if self.ui_manager.should_process_click(x, y):
-                    element_info = self.ui_manager.detect_ui_element(x, y)
-                    
-                    # Only process if we got valid element info
-                    if element_info and 'error' not in element_info:
-                        element_name = element_info.get('name', 'Unknown Element')
-                        app_name = element_info.get('app_name', 'Unknown App')
-                        
-                        print(f"🖱️ Clicked: {element_name} in {app_name}")
-                        
-                        # Get shortcut suggestion for buttons
-                        result = self.ui_manager.get_shortcut_suggestion(element_info)
-                        if result:
-                            shortcut, description = result
-                            self.notification_system.suggest_shortcut(description, shortcut)
-                            # Get database key from central shortcut manager
-                            db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
-                            self.log_event("Shortcut Suggested", f"{shortcut} for {description}", 
-                                         context_action=db_key)
-                        else:
-                            print(f"ℹ️ No shortcut available for {element_name}")
-                        
-                        # Also detect actions (like Excel cell navigation)
-                        shortcut_info = self.action_detector.detect_action(x, y, app_name)
-
-                        # Log the UI element click with proper app name
-                        self.log_event(
-                            event_type="UI Element Click",
-                            details=f"Clicked {element_name}",
-                            app_name=app_name,
-                            context_action="UI_CLICK"
-                        )
-
-                        # If action detector found a shortcut, log it
-                        if shortcut_info:
-                            shortcut, description = shortcut_info
-                            # Send notification for action detector shortcuts
-                            self.notification_system.suggest_shortcut(description, shortcut)
-                            db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
-                            self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
-                                         context_action=db_key)
+                # Get shortcut suggestion from UI automation
+                shortcut_info = self.ui_manager.get_shortcut_suggestion(element_info)
                 
-                # Now we log UI element clicks with proper app names
+                if shortcut_info:
+                    shortcut, description = shortcut_info
+                    # Send notification
+                    self.notification_system.suggest_shortcut(description, shortcut)
+                    # Log the shortcut opportunity
+                    db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
+                    self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
+                                 context_action=db_key)
+                
+                # Check for action detector shortcuts (Excel, etc.)
+                action_shortcut = self.action_detector.detect_action(x, y, app_name)
+                if action_shortcut:
+                    shortcut, description = action_shortcut
+                    # Send notification for action detector shortcuts
+                    self.notification_system.suggest_shortcut(description, shortcut)
+                    # Log the shortcut opportunity
+                    db_key = self.shortcut_manager.get_shortcut_database_key((shortcut, description))
+                    self.log_event("Shortcut Suggested", f"{shortcut} for {description}",
+                                 context_action=db_key)
+                
+                # Log the UI element click
+                self.log_event("UI Element Click", f"Clicked {element_name}",
+                             app_name=app_name, window_title=element_info.get("window_title", ""))
+                print(f"🖱️ Clicked: {element_name} in {app_name}")
                 
         except Exception as e:
-            print(f"❌ Error handling mouse click: {e}")
+            print(f"❌ Error in on_mouse_click: {e}")
         
         # Handle right click separately
         if pressed and button.name == 'right':

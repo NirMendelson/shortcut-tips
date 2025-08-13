@@ -93,6 +93,10 @@ class UIAutomationManager:
             if app_name != "Unknown":
                 print(f"🔍 Detected app: {app_name} for element: {element_info.name}")
             
+            # Additional debug for Chrome elements to help with shortcut detection
+            if "chrome" in app_name.lower():
+                print(f"🔍 Chrome Debug - Element: '{element_info.name}' | Type: {element_info.control_type} | ID: {getattr(element_info, 'automation_id', 'None')}")
+            
             # Return element information
             return {
                 "name": element_info.name or "Unknown Element",

@@ -33,17 +33,28 @@ class ActionDetector:
         self.last_action = None
         self.last_action_timestamp = 0
         self.repeat_action_threshold = 10.0  # 10 seconds threshold for repeat action
+        
+        # Chrome tab switching tracking
+        self.last_chrome_tab_title = None
+        self.last_chrome_tab_time = 0
+        self.tab_switch_threshold = 5.0  # 5 seconds to detect tab switch
     
     def detect_action(self, x, y, app_name):
         """Detect what action the user performed and suggest shortcuts"""
-        if not self.should_process_action():
-            return
+        # Check for Excel-specific actions
+        if app_name and "excel" in app_name.lower():
+            return self.detect_excel_action(x, y)
         
-        # Focus on Excel actions for now
-        if app_name.lower() == self.excel_process_name.lower():
-            result = self.detect_excel_action(x, y)
-            return result
-        else:
+        # Check for other application actions
+        return None
+    
+    def get_ui_element_info(self, x, y):
+        """Get UI element information at coordinates"""
+        try:
+            element = self.ui_desk.from_point(x, y)
+            element_info = element.element_info
+            return element_info
+        except:
             return None
     
     def detect_excel_action(self, x, y):
@@ -267,6 +278,33 @@ class ActionDetector:
         
         # Return shortcut info so it can be logged by the caller
         return shortcut_info
+    
+    def detect_chrome_tab_switch(self, app_name, window_title):
+        """Detect if user manually switched tabs in Chrome"""
+        if not app_name or "chrome" not in app_name.lower():
+            return None
+        
+        current_time = time.time()
+        
+        # If this is the first time or too much time has passed, just update tracking
+        if (self.last_chrome_tab_title is None or 
+            current_time - self.last_chrome_tab_time > self.tab_switch_threshold):
+            self.last_chrome_tab_title = window_title
+            self.last_chrome_tab_time = current_time
+            return None
+        
+        # Check if tab title changed (indicating manual tab switch)
+        if (window_title and self.last_chrome_tab_title and 
+            window_title != self.last_chrome_tab_title):
+            
+            # Update tracking for next time
+            self.last_chrome_tab_title = window_title
+            self.last_chrome_tab_time = current_time
+            
+            # Return shortcut suggestion
+            return ("Ctrl + Tab", "Switch between tabs")
+        
+        return None
     
     def handle_button_click(self, element_info):
         """Handle Excel button clicks (this is already handled in main.py)"""
