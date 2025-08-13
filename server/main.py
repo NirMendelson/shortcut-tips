@@ -476,6 +476,11 @@ class ShortcutCoach:
         self.last_click_time = 0
         self.click_cooldown = 0.1  # 100ms cooldown between clicks
         
+        # Cache for active window info
+        self.last_active_window = None
+        self.last_active_window_time = 0
+        self.window_cache_duration = 0.5  # Cache for 500ms
+        
         # Add deduplication system to prevent double logging
         self.last_events = {}  # Track last event of each type
         self.event_cooldown = 1.0  # 1 second cooldown between same event types
@@ -496,6 +501,57 @@ class ShortcutCoach:
         print("🔄 Deduplication system active - preventing double logging")
         
         self.running = False
+        
+    def get_active_window_info(self):
+        """Get current active window info with caching"""
+        current_time = time.time()
+        
+        # Return cached info if still valid
+        if (self.last_active_window and 
+            current_time - self.last_active_window_time < self.window_cache_duration):
+            return self.last_active_window
+        
+        try:
+            # Get the foreground window using Windows API
+            import win32gui
+            hwnd = win32gui.GetForegroundWindow()
+            window_title = win32gui.GetWindowText(hwnd)
+            
+            # Get process ID and app name
+            import win32process
+            _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+            try:
+                process = psutil.Process(process_id)
+                app_name = process.name()
+                
+                # Get better app name by looking at the executable path
+                try:
+                    exe_path = process.exe()
+                    if exe_path:
+                        # Extract just the filename without path
+                        import os
+                        app_name = os.path.basename(exe_path)
+                except:
+                    pass
+                    
+            except:
+                app_name = "Unknown"
+                
+            # Cache the result
+            self.last_active_window = (window_title, app_name)
+            self.last_active_window_time = current_time
+            
+            # Debug output
+            print(f"🔍 Active Window: {app_name} - {window_title}")
+            
+            return window_title, app_name
+            
+        except Exception as e:
+            # Fallback to window monitor if Windows API fails
+            window_title, app_name = self.window_monitor.get_current_window_info()
+            self.last_active_window = (window_title, app_name)
+            self.last_active_window_time = current_time
+            return window_title, app_name
         
     def is_duplicate_event(self, event_type, details):
         """Check if this event is a duplicate of the last one"""
@@ -545,7 +601,30 @@ class ShortcutCoach:
         if self.is_duplicate_event(event_type, details):
             return  # Skip duplicate events
         
-        window_title, app_name = self.window_monitor.get_current_window_info()
+        # Get app info from the cached active window method
+        window_title, app_name = self.get_active_window_info()
+        
+        # For mouse clicks, try to get more accurate app info from click location
+        if "Click" in event_type and "X=" in details:
+            try:
+                # Extract coordinates from details
+                x_part = details.split("X=")[1].split(",")[0]
+                y_part = details.split("Y=")[1].split(")")[0]
+                x, y = int(x_part), int(y_part)
+                
+                # Try to detect UI element at click location for better app info
+                element_info = self.detect_ui_element(x, y)
+                if element_info and "error" not in element_info:
+                    # Use the app info from the clicked element if available
+                    if element_info["app_name"] != "Unknown":
+                        old_app = app_name
+                        app_name = element_info["app_name"]
+                        if element_info.get("window_title"):
+                            window_title = element_info["window_title"]
+                        print(f"🎯 Click detected in {app_name} (was {old_app})")
+            except:
+                pass  # Fall back to active window info
+        
         self.db_manager.log_event(event_type, details, window_title, app_name, context_action)
         
         # Start data collection in GUI when first event occurs
@@ -553,7 +632,7 @@ class ShortcutCoach:
             self.gui.start_data_collection()
             
         # Also log to console for debugging
-        print(f"📝 {event_type}: {details} in {app_name}")
+        print(f"📝 {event_type}: {details} in {app_name} (Window: {window_title})")
     
     def on_key_press(self, key):
         """Handle keyboard key press events - only log meaningful keys"""
@@ -578,16 +657,34 @@ class ShortcutCoach:
             try:
                 process = psutil.Process(process_id)
                 app_name = process.name()
+                
+                # Get better app name by looking at the executable path
+                try:
+                    exe_path = process.exe()
+                    if exe_path:
+                        # Extract just the filename without path
+                        import os
+                        app_name = os.path.basename(exe_path)
+                except:
+                    pass
+                    
             except:
                 app_name = "Unknown"
             
+            # Get window title if possible
+            try:
+                window_title = element_info.name or "Unknown Element"
+            except:
+                window_title = "Unknown Element"
+            
             # Return element information
             return {
-                "name": element_info.name,
+                "name": element_info.name or "Unknown",
                 "type": str(element_info.control_type),
                 "automation_id": getattr(element_info, "automation_id", None),
                 "class_name": getattr(element_info, "class_name", None),
                 "app_name": app_name,
+                "window_title": window_title,
                 "coordinates": (x, y),
                 "bounds": (rect.left, rect.top, rect.right, rect.bottom),
                 "center": ((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
