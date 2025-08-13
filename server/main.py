@@ -137,18 +137,17 @@ class ShortcutCoachGUI(QMainWindow):
         
         # Live events table
         self.events_table = QTableWidget()
-        self.events_table.setColumnCount(6)
+        self.events_table.setColumnCount(5)
         self.events_table.setHorizontalHeaderLabels([
-            "Time", "Event", "Details", "App", "Window", "Context Action"
+            "Time", "Details", "App", "Window", "Context Action"
         ])
         
         # Set column widths
         self.events_table.setColumnWidth(0, 150)  # Time
-        self.events_table.setColumnWidth(1, 100)  # Event
-        self.events_table.setColumnWidth(2, 150)  # Details
-        self.events_table.setColumnWidth(3, 120)  # App
-        self.events_table.setColumnWidth(4, 200)  # Window
-        self.events_table.setColumnWidth(5, 150)  # Context Action
+        self.events_table.setColumnWidth(1, 200)  # Details
+        self.events_table.setColumnWidth(2, 120)  # App
+        self.events_table.setColumnWidth(3, 200)  # Window
+        self.events_table.setColumnWidth(4, 150)  # Context Action
         
         # Start with empty table showing "No data yet"
         self.events_table.setRowCount(1)
@@ -157,7 +156,6 @@ class ShortcutCoachGUI(QMainWindow):
         self.events_table.setItem(0, 2, QTableWidgetItem(""))
         self.events_table.setItem(0, 3, QTableWidgetItem(""))
         self.events_table.setItem(0, 4, QTableWidgetItem(""))
-        self.events_table.setItem(0, 5, QTableWidgetItem(""))
         
         # Live tracker label
         layout.addWidget(QLabel("Live Event Tracker - Data updates automatically as you use your computer"))
@@ -323,9 +321,8 @@ Start clicking, typing, and switching between apps to see insights appear!
             # Update the table safely
             if events:
                 self.update_events_table(events)
-                print(f"🔄 Refreshed Live Tracker with {len(events)} events")
             else:
-                print("🔄 No events found in database")
+                self.update_events_table([]) # Ensure table shows "No data yet"
             
         except Exception as e:
             print(f"❌ Error refreshing data: {e}")
@@ -347,11 +344,10 @@ Start clicking, typing, and switching between apps to see insights appear!
                 time_str = timestamp
                 
             self.events_table.setItem(i, 0, QTableWidgetItem(time_str))
-            self.events_table.setItem(i, 1, QTableWidgetItem(event_type))
-            self.events_table.setItem(i, 2, QTableWidgetItem(str(details)))
-            self.events_table.setItem(i, 3, QTableWidgetItem(app_name))
-            self.events_table.setItem(i, 4, QTableWidgetItem(window_title))
-            self.events_table.setItem(i, 5, QTableWidgetItem(context_action))
+            self.events_table.setItem(i, 1, QTableWidgetItem(str(details)))
+            self.events_table.setItem(i, 2, QTableWidgetItem(app_name))
+            self.events_table.setItem(i, 3, QTableWidgetItem(window_title))
+            self.events_table.setItem(i, 4, QTableWidgetItem(context_action))
             
     def update_app_usage_table(self, app_usage):
         """Update the app usage table"""
@@ -561,21 +557,8 @@ class ShortcutCoach:
     
     def on_key_press(self, key):
         """Handle keyboard key press events - only log meaningful keys"""
-        try:
-            key_name = key.char if hasattr(key, 'char') else str(key)
-            # Only log special keys, not every character
-            if hasattr(key, 'char') and key.char:
-                # Skip regular typing characters to reduce noise
-                return
-            else:
-                # Only log very specific special keys
-                key_str = str(key)
-                if any(special in key_str.lower() for special in ['ctrl', 'alt', 'shift', 'win', 'tab', 'enter', 'escape', 'backspace', 'delete']):
-                    self.log_event("Key Press", key_str)
-                # Skip all other keys to reduce noise
-        except AttributeError:
-            # Skip unknown keys to reduce noise
-            pass
+        # Don't log here - InputMonitor already handles key logging
+        pass
     
     def on_key_release(self, key):
         """Handle keyboard key release events - only log meaningful keys"""
@@ -696,7 +679,7 @@ class ShortcutCoach:
                self.input_monitor.last_right_click_time and \
                (time.time() - self.input_monitor.last_right_click_time) < 5.0:
                 
-                self.log_event("Left Click (Context Menu)", f"X={x}, Y={y}", context_action="MENU_SELECTION")
+                # Don't log here - InputMonitor already logged it
                 
                 # Use UI Automation to detect what was clicked
                 if self.should_process_click(x, y):
@@ -738,10 +721,11 @@ class ShortcutCoach:
                     # Also detect actions (like Excel cell navigation)
                     self.action_detector.detect_action(x, y, element_info['app_name'])
                 
-                self.log_event("Left Click", f"X={x}, Y={y}")
+                # Don't log here - InputMonitor already logged it
                 
         elif pressed and button.name == 'right':
-            self.log_event("Right Click", f"X={x}, Y={y}", context_action="CONTEXT_MENU_OPENED")
+            # Don't log here - InputMonitor already logged it
+            pass
     
     def start_tracking(self):
         """Start event tracking"""

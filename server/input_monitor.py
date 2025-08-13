@@ -71,6 +71,7 @@ class InputMonitor:
         """Safe wrapper for keyboard callback to prevent crashes"""
         try:
             if is_press:
+                print(f"🔤 Keyboard event: {key}")  # Debug output
                 self.on_key_press(key)
             else:
                 self.on_key_release(key)
@@ -105,7 +106,7 @@ class InputMonitor:
                     self.context_menu_callback(x, y, button, pressed)
     
     def on_key_press(self, key):
-        """Handle keyboard key press events"""
+        """Handle keyboard key press events - log meaningful keys and shortcuts"""
         try:
             key_name = key.char if hasattr(key, 'char') else str(key)
             
@@ -115,43 +116,53 @@ class InputMonitor:
                     self.event_callback("Key Press", key_name, context_action="COPY_SHORTCUT")
                 elif key.char.lower() == 'v' and self.context_menu_active:
                     self.event_callback("Key Press", key_name, context_action="PASTE_SHORTCUT")
-                elif key.char.lower() == 'x' and self.context_menu_active:
+                elif key_name.lower() == 'x' and self.context_menu_active:
                     self.event_callback("Key Press", key_name, context_action="CUT_SHORTCUT")
+                # Log regular characters but with context
                 else:
-                    self.event_callback("Key Press", key_name)
+                    self.event_callback("Key Press", key_name, context_action="TYPING")
             else:
-                self.event_callback("Key Press", str(key))
+                # Log special keys (Ctrl, Alt, Shift, etc.)
+                key_str = str(key)
+                if any(special in key_str.lower() for special in ['ctrl', 'alt', 'shift', 'win', 'tab', 'enter', 'escape', 'backspace', 'delete']):
+                    self.event_callback("Key Press", key_str, context_action="SPECIAL_KEY")
+                else:
+                    # Log other special keys too
+                    self.event_callback("Key Press", key_str, context_action="OTHER_KEY")
                 
         except AttributeError:
-            # Special keys like ctrl, alt, etc.
-            self.event_callback("Key Press", str(key))
+            # Log unknown keys
+            self.event_callback("Key Press", str(key), context_action="UNKNOWN_KEY")
     
     def on_key_release(self, key):
-        """Handle keyboard key release events"""
-        try:
-            key_name = key.char if hasattr(key, 'char') else str(key)
-            self.event_callback("Key Release", key_name)
-        except AttributeError:
-            self.event_callback("Key Release", str(key))
+        """Handle keyboard key release events - skip to reduce noise"""
+        pass
     
     def start_listeners(self):
         """Start input listeners with error handling"""
         try:
+            print("🎯 Starting mouse listener...")
             self.mouse_listener = mouse.Listener(
                 on_click=self.safe_mouse_callback
             )
+            
+            print("🎯 Starting keyboard listener...")
             self.keyboard_listener = keyboard.Listener(
                 on_press=lambda key: self.safe_keyboard_callback(key, True),
                 on_release=lambda key: self.safe_keyboard_callback(key, False)
             )
             
             self.mouse_listener.start()
+            print("✅ Mouse listener started")
+            
             self.keyboard_listener.start()
-            print("Input listeners started successfully")
+            print("✅ Keyboard listener started")
+            
+            print("🎯 Input listeners started successfully")
             return True
             
         except Exception as e:
-            print(f"Warning: Could not start input listeners: {e}")
+            print(f"❌ Warning: Could not start input listeners: {e}")
             print("Continuing with window tracking only...")
             return False
     

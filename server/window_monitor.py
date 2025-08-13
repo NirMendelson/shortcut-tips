@@ -10,39 +10,8 @@ class WindowMonitor:
         
     def get_current_window_info(self):
         """Get current active window title and application name"""
-        current_time = time.time()
-        
-        # Only check if enough time has passed
-        if current_time - self.last_check_time < self.check_interval:
-            return self.last_window_info
-            
-        try:
-            # Get active window using psutil (simplified approach)
-            # In a real implementation, you'd use Windows API
-            active_process = psutil.Process()
-            
-            # Get process name
-            app_name = active_process.name()
-            
-            # For demo purposes, simulate window titles
-            window_titles = {
-                "cursor.exe": "Shortcut Coach - Cursor",
-                "chrome.exe": "Google Chrome - Programming",
-                "excel.exe": "Excel - Data Analysis",
-                "notepad.exe": "Notepad - Notes",
-                "code.exe": "VS Code - Project"
-            }
-            
-            window_title = window_titles.get(app_name, f"Active Window - {app_name}")
-            
-            self.last_window_info = (window_title, app_name)
-            self.last_check_time = current_time
-            
-            return window_title, app_name
-            
-        except Exception as e:
-            print(f"Window monitor error: {e}")
-            return "Unknown Window", "Unknown"
+        # For now, return generic info - the real app name comes from the click events
+        return "Active Window", "Unknown"
     
     def get_window_list(self):
         """Get list of all visible windows (demo function)"""
