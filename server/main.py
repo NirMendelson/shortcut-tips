@@ -139,7 +139,7 @@ class ShortcutCoachGUI(QMainWindow):
         self.events_table = QTableWidget()
         self.events_table.setColumnCount(3)
         self.events_table.setHorizontalHeaderLabels([
-            "Time", "Details", "App"
+            "Time", "Action", "App"
         ])
         
         # Set column widths
@@ -154,7 +154,7 @@ class ShortcutCoachGUI(QMainWindow):
         self.events_table.setItem(0, 2, QTableWidgetItem(""))
         
         # Live tracker label
-        layout.addWidget(QLabel("Live Event Tracker - Current Session Only - Shows Time, Details, and App - Updates automatically every second"))
+        layout.addWidget(QLabel("Live Event Tracker - Current Session Only - Shows Time, Action, and App - Updates automatically every second"))
         layout.addWidget(self.events_table)
         
         self.tab_widget.addTab(tab, "🔴 Live Tracker")
@@ -328,12 +328,8 @@ Start clicking, typing, and switching between apps to see insights appear!
             # Update the table safely
             if events:
                 self.update_events_table(events)
-                # Debug: show how many events are from current session
-                if hasattr(self, 'session_start_time') and self.session_start_time:
-                    print(f"🔄 Live Tracker updated with {len(events)} current session events")
             else:
                 self.update_events_table([]) # Ensure table shows "No data yet"
-                print("🔄 Live Tracker: No current session events yet")
             
         except Exception as e:
             print(f"❌ Error refreshing data: {e}")

@@ -339,7 +339,7 @@ class InputMonitor:
             hwnd = win32gui.GetForegroundWindow()
             if hwnd:
                 # Get the thread ID of the foreground window
-                thread_id = win32gui.GetWindowThreadProcessId(hwnd)[0]
+                thread_id = win32process.GetWindowThreadProcessId(hwnd)[0]
                 
                 # Get the keyboard layout for this thread
                 layout_id = win32api.GetKeyboardLayout(thread_id)
