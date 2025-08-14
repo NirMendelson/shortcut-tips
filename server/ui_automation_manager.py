@@ -10,6 +10,7 @@ import psutil
 from datetime import datetime
 from shortcut_manager import ShortcutManager
 
+
 class UIAutomationManager:
     """Manages Windows UI Automation for detecting UI elements"""
 
@@ -40,11 +41,10 @@ class UIAutomationManager:
         current_time = time.time()
         if current_time - self.last_click_time < self.click_cooldown:
             return False
-
         self.last_click_time = current_time
         return True
 
-    def _wait_for_title_settle(self, hwnd, timeout=0.35, step=0.04):
+    def _wait_for_title_settle(self, hwnd, timeout=0.5, step=0.04):
         """Poll GetWindowText until it stabilizes or timeout"""
         import win32gui
         t0 = time.time()
@@ -52,92 +52,111 @@ class UIAutomationManager:
         while time.time() - t0 < timeout:
             time.sleep(step)
             cur = win32gui.GetWindowText(hwnd) or ""
-            # If title changed and then stayed the same for one more step, assume it's settled
             if cur != last:
-                # one more short check
+                # confirm stability with one extra read
                 time.sleep(step)
                 cur2 = win32gui.GetWindowText(hwnd) or ""
                 if cur2 == cur:
                     return cur
                 last = cur2
-            else:
-                # unchanged this cycle; keep looping until timeout
-                pass
         return last
 
-    def detect_ui_element(self, x, y):
-        """Detect what UI element was clicked at coordinates (x, y)"""
+    def _foreground_info(self, settle_for_chrome=True):
+        """Return (app_name, window_title, hwnd) for current foreground window"""
+        import win32gui
+        import win32process
         try:
-            # Get element at click point
+            hwnd = win32gui.GetForegroundWindow()
+            if not hwnd:
+                return ("Unknown", "Unknown", None)
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            app_name = "Unknown"
+            if pid:
+                p = psutil.Process(pid)
+                if p and p.name():
+                    app_name = p.name().replace(".exe", "")
+            if app_name.lower() == "chrome" and settle_for_chrome:
+                title = self._wait_for_title_settle(hwnd)
+            else:
+                title = win32gui.GetWindowText(hwnd) or "Unknown"
+            return (app_name, title, hwnd)
+        except Exception:
+            return ("Unknown", "Unknown", None)
+
+    def _wait_for_foreground_targets(self, targets, timeout=0.5, step=0.02):
+        """
+        Wait until the foreground app name lower() is in targets.
+        If Chrome becomes foreground, also wait for tab title to settle.
+        Returns (app_name, window_title, hwnd). Falls back to last reading on timeout.
+        """
+        t0 = time.time()
+        last = self._foreground_info(settle_for_chrome=False)
+        while time.time() - t0 < timeout:
+            app, title, hwnd = self._foreground_info(settle_for_chrome=False)
+            last = (app, title, hwnd)
+            if app.lower() in targets:
+                # If Chrome, settle the title before returning
+                if app.lower() == "chrome" and hwnd:
+                    settled_title = self._wait_for_title_settle(hwnd)
+                    return (app, settled_title, hwnd)
+                return (app, title, hwnd)
+            time.sleep(step)
+        # Timeout, return last seen
+        app, title, hwnd = last
+        if app.lower() == "chrome" and hwnd:
+            title = self._wait_for_title_settle(hwnd)
+        return (app, title, hwnd)
+
+    def detect_ui_element(self, x, y):
+        """Detect what UI element was clicked at coordinates (x, y) with foreground reconciliation."""
+        try:
+            # 1) Read the element under the cursor
             element = self.ui_desk.from_point(x, y)
-            element_info = element.element_info
+            info = element.element_info
             rect = element.rectangle()
 
-            # Get process info with multiple fallback methods
-            app_name = "Unknown"
+            # 2) App from the clicked element (may be wrong during app switches or taskbar clicks)
+            element_app = "Unknown"
             try:
-                # Method 1: from element process ID
-                process_id = element_info.process_id
-                if process_id:
-                    process = psutil.Process(process_id)
-                    app_name = process.name().replace('.exe', '') if process.name() else "Unknown"
+                if info.process_id:
+                    proc = psutil.Process(info.process_id)
+                    if proc and proc.name():
+                        element_app = proc.name().replace(".exe", "")
             except:
-                try:
-                    # Method 2: from active window
-                    active_window = self.ui_desk.active()
-                    if active_window:
-                        process_id = active_window.process_id()
-                        if process_id:
-                            process = psutil.Process(process_id)
-                            app_name = process.name().replace('.exe', '') if process.name() else "Unknown"
-                except:
-                    try:
-                        # Method 3: from foreground HWND
-                        import win32gui
-                        import win32process
-                        hwnd = win32gui.GetForegroundWindow()
-                        if hwnd:
-                            _, process_id = win32process.GetWindowThreadProcessId(hwnd)
-                            if process_id:
-                                process = psutil.Process(process_id)
-                                app_name = process.name().replace('.exe', '') if process.name() else "Unknown"
-                        else:
-                            app_name = "Unknown"
-                    except:
-                        app_name = "Unknown"
+                pass
 
-            # Debug output for application detection
-            if app_name != "Unknown":
-                print(f"🔍 Detected app: {app_name} for element: {element_info.name}")
+            # 3) After the click, wait for the real foreground app to become either:
+            #    - the app of the clicked element, or
+            #    - Chrome (very common when switching into Chrome)
+            targets = set(filter(None, [element_app.lower(), "chrome"]))
+            fg_app, fg_title, _ = self._wait_for_foreground_targets(targets, timeout=0.5, step=0.02)
 
-            # Extra handling for Chrome: force-refresh the window title AFTER the click
-            # so we don't log the previous tab name.
-            if "chrome" in app_name.lower():
-                try:
-                    import win32gui
-                    import win32process
-                    hwnd = win32gui.GetForegroundWindow()
-                    if hwnd:
-                        # Wait briefly for Chrome to apply the new title
-                        settled_title = self._wait_for_title_settle(hwnd)
-                        print(f"🔍 Chrome Debug - Element: '{element_info.name}' | Type: {element_info.control_type} | ID: {getattr(element_info, 'automation_id', 'None')}")
-                        # Attach the fresh, settled title to the returned info
-                        window_title = settled_title
-                    else:
-                        window_title = None
-                except:
-                    window_title = None
-            else:
-                window_title = None
+            window_title = None
+            effective_app = fg_app if fg_app != "Unknown" else element_app
+            effective_name = info.name or "Unknown Element"
 
-            # Return element information
+            # Prefer the settled foreground information
+            if effective_app.lower() == "chrome":
+                window_title = fg_title
+                # If the clicked element is not from Chrome or has no useful name, use tab title as the element name
+                if not info.name or not info.name.strip() or element_app.lower() != "chrome":
+                    effective_name = fg_title if fg_title and fg_title.strip() else "Chrome Window"
+                print(f"🔍 Chrome Debug - Element: '{info.name}' | Type: {info.control_type} | ID: {getattr(info, 'automation_id', 'None')}")
+
+            # If still unknown name, use window title as a fallback label
+            if (not effective_name or effective_name == "Unknown Element") and window_title:
+                effective_name = window_title
+
+            if effective_app != "Unknown":
+                print(f"🔍 Detected app: {effective_app} for element: {effective_name}")
+
             return {
-                "name": element_info.name or "Unknown Element",
-                "type": str(element_info.control_type),
-                "automation_id": getattr(element_info, "automation_id", None),
-                "class_name": getattr(element_info, "class_name", None),
-                "app_name": app_name,
-                "window_title": window_title,  # may hold fresh Chrome tab title
+                "name": effective_name or "Unknown Element",
+                "type": str(info.control_type),
+                "automation_id": getattr(info, "automation_id", None),
+                "class_name": getattr(info, "class_name", None),
+                "app_name": effective_app,
+                "window_title": window_title,  # set for Chrome
                 "coordinates": (x, y),
                 "bounds": (rect.left, rect.top, rect.right, rect.bottom),
                 "center": ((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
@@ -180,38 +199,18 @@ class UIAutomationManager:
                     return cached
 
         try:
-            import win32gui
-            import win32process
-
-            hwnd = win32gui.GetForegroundWindow()
-            if hwnd:
-                _, process_id = win32process.GetWindowThreadProcessId(hwnd)
-                if process_id:
-                    process = psutil.Process(process_id)
-                    app_name = process.name().replace('.exe', '') if process.name() else "Unknown"
-                else:
-                    app_name = "Unknown"
-            else:
-                app_name = "Unknown"
-
-            # For Chrome, wait for the title to settle to avoid one-click lag
-            if app_name.lower() == "chrome" and hwnd:
-                window_title = self._wait_for_title_settle(hwnd)
-            else:
-                window_title = win32gui.GetWindowText(hwnd) if hwnd else "Unknown"
-
+            app_name, window_title, _ = self._foreground_info(settle_for_chrome=True)
             window_info = {
                 "title": window_title or "Unknown",
                 "app_name": app_name,
                 "timestamp": current_time
             }
 
-            # Update cache only for non-Chrome
+            # Cache only for non-Chrome
             if app_name.lower() != "chrome":
                 self.last_active_window = window_info
                 self.last_active_window_time = current_time
             else:
-                # Do not cache Chrome so next query can pick up new tab immediately
                 self.last_active_window = None
                 self.last_active_window_time = 0
 
