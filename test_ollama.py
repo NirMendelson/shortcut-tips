@@ -34,43 +34,43 @@ def test_suggestion_generation():
     """Test generating suggestions with sample data"""
     print("\n🧠 Testing Suggestion Generation...")
     
-    # Sample user behavior data (similar to what we see in the GUI)
+    # Sample user behavior data showing Facebook → Google Maps workflow
     sample_data = [
         {
             "timestamp": "2024-01-15T10:30:00",
-            "event_type": "Clipboard...",
-            "details": "רחוב מיכ\"ל",
-            "app_name": "chrome"
+            "event_type": "Clipboard Copy",
+            "details": "רחוב מיכ\"ל, תל אביב",
+            "app_name": "facebook.com"
         },
         {
             "timestamp": "2024-01-15T10:30:05",
-            "event_type": "Key Press",
-            "details": "Ctrl",
-            "app_name": "chrome"
+            "event_type": "App Switch",
+            "details": "Switched to Google Maps",
+            "app_name": "maps.google.com"
         },
         {
             "timestamp": "2024-01-15T10:30:06",
             "event_type": "Shortcut",
-            "details": "Ctrl + V",
-            "app_name": "chrome"
+            "details": "Ctrl + V (Paste)",
+            "app_name": "maps.google.com"
         },
         {
             "timestamp": "2024-01-15T10:30:10",
             "event_type": "UI Element Click",
-            "details": "Google Maps - Google Chrome",
-            "app_name": "chrome"
+            "details": "Search button clicked",
+            "app_name": "maps.google.com"
         },
         {
             "timestamp": "2024-01-15T10:30:15",
-            "event_type": "Clipboard...",
-            "details": "ריינס פינת בן גוריון",
-            "app_name": "chrome"
+            "event_type": "Clipboard Copy",
+            "details": "ריינס פינת בן גוריון, תל אביב",
+            "app_name": "facebook.com"
         },
         {
             "timestamp": "2024-01-15T10:30:20",
             "event_type": "Shortcut",
-            "details": "Ctrl + V",
-            "app_name": "chrome"
+            "details": "Ctrl + V (Paste)",
+            "app_name": "maps.google.com"
         }
     ]
     

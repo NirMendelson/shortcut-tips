@@ -79,28 +79,26 @@ class OllamaManager:
         
         events_text = "\n".join(events_summary)
         
-        prompt = f"""
-Analyze this user behavior and suggest CUSTOM shortcuts that don't exist yet.
+        prompt = f"""Analyze this user behavior and suggest ONE workflow automation.
 
-IMPORTANT: DO NOT suggest standard shortcuts like Ctrl+C, Ctrl+V, Ctrl+Tab, etc.
-
-User Behavior Data:
+User Behavior:
 {events_text}
 
-Look for repetitive workflows: copy from app A → paste in app B, frequently typed text, multi-step processes.
+Look for repetitive workflows where the user copies data FROM one app and pastes it INTO another app.
+Pay attention to the sequence: first app (source) → second app (destination).
 
-Respond in JSON format:
+Respond with JSON only:
 {{
     "suggestions": [
         {{
-            "shortcut": "Custom shortcut (e.g., 'Ctrl+Shift+M for Maps Search')",
-            "explanation": "What workflow this automates"
+            "shortcut": "Custom shortcut name",
+            "explanation": "I suggest to automate copying FROM [source app] TO [destination app] for [specific data type]"
         }}
     ]
 }}
 
-Focus on NEW shortcuts that automate repetitive workflows.
-"""
+Focus on ONE workflow that automates repetitive copy-paste tasks between different applications.
+Be specific about the direction: FROM which app TO which app."""
         
         return prompt
     
@@ -122,7 +120,7 @@ Focus on NEW shortcuts that automate repetitive workflows.
             response = requests.post(
                 self.api_url,
                 json=payload,
-                timeout=120  # Increased to 120 seconds
+                timeout=180  # Increased to 180 seconds
             )
             response.raise_for_status()
             

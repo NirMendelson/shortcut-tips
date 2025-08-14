@@ -254,6 +254,9 @@ class ShortcutCoachGUI(QMainWindow):
         # Suggestions text area
         self.suggestions_text = QTextEdit()
         self.suggestions_text.setPlaceholderText("AI suggestions will appear here as you use the system...")
+        # Set larger font for better readability
+        font = QFont("Arial", 14)  # Increased from default to 14pt
+        self.suggestions_text.setFont(font)
         layout.addWidget(self.suggestions_text)
         
         # Generate suggestions button
@@ -525,6 +528,13 @@ Start using your computer to collect data for AI-powered insights!
                     "context_action": event[5] or ""
                 })
             
+            # DEBUG: Print the exact data being sent to Ollama
+            print("\n🔍 DEBUG: Data being sent to Ollama:")
+            print("=" * 60)
+            for i, event in enumerate(behavior_data):
+                print(f"{i+1:2d}. {event['timestamp']}: {event['event_type']} - {event['details']} (in {event['app_name']}) - {event['window_title']}")
+            print("=" * 60)
+            
             # Generate AI suggestions using Ollama
             print(f"🧠 Generating AI suggestions for {len(behavior_data)} events...")
             result = self.ollama_manager.generate_suggestions(behavior_data)
@@ -538,35 +548,17 @@ Start using your computer to collect data for AI-powered insights!
                 suggestions = result['suggestions']
                 
                 if suggestions and len(suggestions) > 0:
-                    new_suggestions = f"""
-🤖 AI-Powered Shortcut Suggestions
-
-Based on analysis of {len(behavior_data)} recent actions:
-
-"""
+                    # Only take the first suggestion to avoid duplicates
+                    suggestion = suggestions[0]
+                    explanation = suggestion.get('explanation', 'No explanation provided')
                     
-                    for i, suggestion in enumerate(suggestions, 1):
-                        shortcut = suggestion.get('shortcut', 'Unknown')
-                        explanation = suggestion.get('explanation', 'No explanation provided')
-                        
-                        new_suggestions += f"""
-{i}. 🎯 {shortcut}
-   �� {explanation}
-"""
+                    # Clean up the explanation to remove any JSON artifacts
+                    if explanation.startswith('{') or '"suggestions"' in explanation:
+                        explanation = "automating repetitive workflow patterns"
                     
-                    new_suggestions += f"""
-
-💡 These suggestions are based on your actual usage patterns.
-   The more you use your computer, the better the AI recommendations become!
-                """
+                    new_suggestions = f"1. {explanation}"
                 else:
-                    new_suggestions = """
-🤖 No Specific Patterns Detected
-
-The AI analyzed your behavior but didn't find clear patterns yet.
-
-💡 Keep using your computer normally - the AI will learn your habits and provide better suggestions over time!
-                """
+                    new_suggestions = "No specific patterns detected yet."
             else:
                 # Fallback to basic statistics if AI fails
                 total_events = len(behavior_data)
