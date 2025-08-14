@@ -32,6 +32,9 @@ class InputMonitor:
         self.current_language = None  # Start with None to indicate no language detected yet
         self.last_language_check = 0
         self.language_check_interval = 0.5  # Check every 500ms
+        
+        # Modifier tracking
+        self.modifiers = set()  # tracks currently held modifiers: {'Ctrl', 'Shift', 'Alt', 'Windows'}
     
     def start_clipboard_monitoring(self):
         """Start monitoring clipboard changes in background thread"""
@@ -133,64 +136,108 @@ class InputMonitor:
     def on_key_press(self, key):
         """Handle keyboard key press events - log meaningful keys and shortcuts"""
         try:
-            # Check for common shortcuts that might be used after right-click
-            if hasattr(key, 'char') and key.char:
-                # Handle regular character keys
-                char = key.char
-                
-                # Check for context menu shortcuts
-                if char.lower() == 'c' and self.context_menu_active:
-                    self.event_callback("Key Press", "C", context_action="COPY_SHORTCUT")
-                elif char.lower() == 'v' and self.context_menu_active:
-                    self.event_callback("Key Press", "V", context_action="PASTE_SHORTCUT")
-                elif char.lower() == 'x' and self.context_menu_active:
-                    self.event_callback("Key Press", "X", context_action="CUT_SHORTCUT")
-                # Log regular characters with proper case handling
-                else:
-                    # Apply Caps Lock logic to alphabetic characters
-                    if char.isalpha():
-                        if self.caps_lock_active:
-                            # Caps Lock is ON, so show uppercase
-                            display_char = char.upper()
-                        else:
-                            # Caps Lock is OFF, show as typed
-                            display_char = char
-                    else:
-                        # Non-alphabetic characters (numbers, symbols) are not affected by Caps Lock
-                        display_char = char
-                    
-                    # Add context about Caps Lock state and language
-                    context = "TYPING"
-                    if self.caps_lock_active:
-                        context = "TYPING_CAPS"
-                    
-                    # Debug output to show character, state, and language
-                    print(f"🔤 Typing: '{char}' → '{display_char}' (Caps: {'ON' if self.caps_lock_active else 'OFF'}, Lang: {self.current_language})")
-                    
-                    # Log the properly formatted character with language context
-                    self.event_callback("Key Press", display_char, context_action=context)
+            key_str = str(key).lower()
+
+            # Track modifiers
+            if any(m in key_str for m in ["key.ctrl", "key.ctrl_l", "key.ctrl_r"]):
+                self.modifiers.add("Ctrl")
+                self.event_callback("Key Press", "Ctrl", context_action="SPECIAL_KEY")
+                return
+            if any(m in key_str for m in ["key.shift", "key.shift_l", "key.shift_r"]):
+                self.modifiers.add("Shift")
+                self.event_callback("Key Press", "Shift", context_action="SPECIAL_KEY")
+                return
+            if any(m in key_str for m in ["key.alt", "key.alt_l", "key.alt_r"]):
+                self.modifiers.add("Alt")
+                self.event_callback("Key Press", "Alt", context_action="SPECIAL_KEY")
+                return
+            if "key.cmd" in key_str or "key.win" in key_str:
+                self.modifiers.add("Windows")
+                self.event_callback("Key Press", "Windows", context_action="SPECIAL_KEY")
+                return
+
+            # Non-modifier key
+            key_name = self._key_display_name(key)
+            
+            # Safety check: prevent empty key names from slipping through
+            if not key_name or key_name.strip() == "":
+                # Last resort: do nothing rather than logging a blank
+                return
+
+            # If any modifier is held, emit a combo like "Ctrl + C"
+            if self.modifiers:
+                # Prefer standard order
+                order = {"Ctrl": 1, "Shift": 2, "Alt": 3, "Windows": 4}
+                mods = " + ".join(sorted(self.modifiers, key=lambda m: order.get(m, 99)))
+                combo = f"{mods} + {key_name.upper() if len(key_name) == 1 else key_name}"
+                self.event_callback("Shortcut", combo, context_action="COMBO")
             else:
-                # Handle special keys (Ctrl, Alt, Shift, etc.)
-                key_str = str(key)
-                formatted_key = self.format_key_name(key_str)
-                
-                # Handle Caps Lock specifically
-                if 'caps_lock' in key_str.lower():
-                    self.caps_lock_active = not self.caps_lock_active  # Toggle state
-                    status = "ON" if self.caps_lock_active else "OFF"
-                    self.event_callback("Key Press", f"Caps Lock {status}", context_action="CAPS_LOCK_TOGGLE")
-                # Log other important special keys
-                elif any(special in key_str.lower() for special in ['ctrl', 'alt', 'shift', 'win', 'tab', 'enter', 'escape', 'backspace', 'delete']):
-                    self.event_callback("Key Press", formatted_key, context_action="SPECIAL_KEY")
-                # Skip other special keys to reduce noise
-                
-        except AttributeError:
-            # Skip unknown keys to reduce noise
-            pass
+                # Handle regular character keys
+                if hasattr(key, 'char') and key.char:
+                    char = key.char
+                    
+                    # Check for context menu shortcuts
+                    if char.lower() == 'c' and self.context_menu_active:
+                        self.event_callback("Key Press", "C", context_action="COPY_SHORTCUT")
+                    elif char.lower() == 'v' and self.context_menu_active:
+                        self.event_callback("Key Press", "V", context_action="PASTE_SHORTCUT")
+                    elif char.lower() == 'x' and self.context_menu_active:
+                        self.event_callback("Key Press", "X", context_action="CUT_SHORTCUT")
+                    # Log regular characters with proper case handling
+                    else:
+                        # Apply Caps Lock logic to alphabetic characters
+                        if char.isalpha():
+                            if self.caps_lock_active:
+                                # Caps Lock is ON, so show uppercase
+                                display_char = char.upper()
+                            else:
+                                # Caps Lock is OFF, show as typed
+                                display_char = char
+                        else:
+                            # Non-alphabetic characters (numbers, symbols) are not affected by Caps Lock
+                            display_char = char
+                        
+                        # Add context about Caps Lock state and language
+                        context = "TYPING"
+                        if self.caps_lock_active:
+                            context = "TYPING_CAPS"
+                        
+                        # Debug output to show character, state, and language
+                        print(f"🔤 Typing: '{char}' → '{display_char}' (Caps: {'ON' if self.caps_lock_active else 'OFF'}, Lang: {self.current_language})")
+                        
+                        # Log the properly formatted character with language context
+                        self.event_callback("Key Press", display_char, context_action=context)
+                else:
+                    # Handle special keys (Ctrl, Alt, Shift, etc.)
+                    formatted_key = self.format_key_name(str(key))
+                    
+                    # Handle Caps Lock specifically
+                    if 'caps_lock' in key_str:
+                        self.caps_lock_active = not self.caps_lock_active  # Toggle state
+                        status = "ON" if self.caps_lock_active else "OFF"
+                        self.event_callback("Key Press", f"Caps Lock {status}", context_action="CAPS_LOCK_TOGGLE")
+                    # Log other important special keys
+                    elif any(special in key_str for special in ['tab','enter','escape','backspace','delete','page_up','page_down','home','end','insert']):
+                        self.event_callback("Key Press", formatted_key, context_action="SPECIAL_KEY")
+                    # Skip other special keys to reduce noise
+
+        except Exception as e:
+            print(f"Keyboard callback error: {e}")
     
     def on_key_release(self, key):
-        """Handle keyboard key release events - skip to reduce noise"""
-        pass
+        """Handle keyboard key release events - clear modifiers when released"""
+        try:
+            k = str(key).lower()
+            if any(m in k for m in ["key.ctrl", "key.ctrl_l", "key.ctrl_r"]):
+                self.modifiers.discard("Ctrl")
+            elif any(m in k for m in ["key.shift", "key.shift_l", "key.shift_r"]):
+                self.modifiers.discard("Shift")
+            elif any(m in k for m in ["key.alt", "key.alt_l", "key.alt_r"]):
+                self.modifiers.discard("Alt")
+            elif "key.cmd" in k or "key.win" in k:
+                self.modifiers.discard("Windows")
+        except Exception:
+            pass
         
     def format_key_name(self, key_str):
         """Format key names to be more user-friendly"""
@@ -248,6 +295,43 @@ class InputMonitor:
         
         # Return formatted key name or capitalize the original
         return key_mapping.get(key_name.lower(), key_name.title())
+    
+    def _key_display_name(self, key):
+        """Resolve a printable key name even when char is None or is a control char."""
+        # If pynput gave us a character
+        if hasattr(key, "char") and key.char:
+            ch = key.char
+            # Map ASCII control chars (ETX, etc.) back to letters when possible
+            # Ctrl+A..Ctrl+Z -> 0x01..0x1A
+            code = ord(ch)
+            if 1 <= code <= 26:
+                return chr(code + 64)  # 1->A, 2->B, ..., 26->Z
+            # Some Ctrl+punctuation combos map to 27..31
+            ctrl_punct = {27: "[", 28: "\\", 29: "]", 30: "^", 31: "_"}
+            if code in ctrl_punct:
+                return ctrl_punct[code]
+            # Normal printable char
+            return ch.upper() if ch.isalpha() else ch
+
+        # Try virtual-key code on Windows
+        vk = getattr(key, "vk", None)
+        if isinstance(vk, int):
+            # Letters A-Z
+            if 0x41 <= vk <= 0x5A:
+                return chr(vk)
+            # Digits 0-9
+            if 0x30 <= vk <= 0x39:
+                return chr(vk)
+            # Common punctuation on US layout fallback
+            vk_map = {
+                0xBA: ";", 0xBB: "=", 0xBC: ",", 0xBD: "-", 0xBE: ".",
+                0xBF: "/", 0xC0: "`", 0xDB: "[", 0xDC: "\\", 0xDD: "]", 0xDE: "'"
+            }
+            if vk in vk_map:
+                return vk_map[vk]
+
+        # Fallback to formatted special name (e.g., Enter, Tab)
+        return self.format_key_name(str(key))
     
     def start_listeners(self):
         """Start input listeners with error handling"""
