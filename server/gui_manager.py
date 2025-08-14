@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont, QPalette, QColor
 from shortcut_manager import ShortcutManager
+from ollama_manager import OllamaManager
 
 class DataCollector:
     """Simple data collector for the GUI"""
@@ -56,6 +57,9 @@ class ShortcutCoachGUI(QMainWindow):
         
         # Initialize central shortcut manager for consistent shortcut mapping
         self.shortcut_manager = ShortcutManager()
+        
+        # Initialize Ollama manager for AI suggestions
+        self.ollama_manager = OllamaManager()
         
     def set_dark_theme(self):
         """Apply modern dark theme"""
@@ -473,24 +477,28 @@ class ShortcutCoachGUI(QMainWindow):
         return reverse_mapping.get(database_key, "Unknown")
             
     def generate_ai_suggestions(self):
-        """Generate new AI suggestions based on real data"""
+        """Generate new AI suggestions based on real data using Ollama"""
         try:
+            # Show loading message
+            self.suggestions_text.setPlainText("🤖 Analyzing your behavior patterns...\n\nPlease wait while the AI generates personalized suggestions...")
+            
+            # Get user behavior data from database
             conn = sqlite3.connect('shortcuts.db')
             cursor = conn.cursor()
             
-            # Get current data from database to show real insights (only from after GUI opened)
-            cursor.execute("SELECT COUNT(*) FROM events WHERE timestamp > ?", (self.gui_start_time,))
-            total_events = cursor.fetchone()[0]
+            # Get recent events (last 100 events from after GUI opened)
+            cursor.execute("""
+                SELECT timestamp, event_type, details, app_name, window_title, context_action
+                FROM events 
+                WHERE timestamp > datetime('now', '-2 hours')
+                ORDER BY timestamp DESC 
+                LIMIT 20
+            """)
             
-            cursor.execute("SELECT COUNT(DISTINCT app_name) FROM events WHERE app_name != 'Unknown' AND timestamp > ?", (self.gui_start_time,))
-            unique_apps = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM events WHERE (context_action LIKE '%copy%' OR context_action LIKE '%paste%') AND timestamp > ?", (self.gui_start_time,))
-            missed_shortcuts = cursor.fetchone()[0]
-            
+            events = cursor.fetchall()
             conn.close()
             
-            if total_events == 0:
+            if len(events) == 0:
                 new_suggestions = """
 🤖 No Data Yet
 
@@ -502,27 +510,88 @@ Start using your computer to collect data for AI-powered insights!
 • Missed shortcut opportunities
 • Time-saving workflow suggestions
                 """
+                self.suggestions_text.setPlainText(new_suggestions)
+                return
+            
+            # Convert events to the format expected by Ollama manager
+            behavior_data = []
+            for event in events:
+                behavior_data.append({
+                    "timestamp": event[0],
+                    "event_type": event[1],
+                    "details": event[2] or "",
+                    "app_name": event[3] or "Unknown",
+                    "window_title": event[4] or "",
+                    "context_action": event[5] or ""
+                })
+            
+            # Generate AI suggestions using Ollama
+            print(f"🧠 Generating AI suggestions for {len(behavior_data)} events...")
+            result = self.ollama_manager.generate_suggestions(behavior_data)
+            
+            # Debug logging
+            print(f"🔍 Ollama result: {result}")
+            print(f"🔍 Success key: {result.get('success')}")
+            print(f"🔍 Error key: {result.get('error')}")
+            
+            if result.get('success'):
+                suggestions = result['suggestions']
+                
+                if suggestions and len(suggestions) > 0:
+                    new_suggestions = f"""
+🤖 AI-Powered Shortcut Suggestions
+
+Based on analysis of {len(behavior_data)} recent actions:
+
+"""
+                    
+                    for i, suggestion in enumerate(suggestions, 1):
+                        shortcut = suggestion.get('shortcut', 'Unknown')
+                        explanation = suggestion.get('explanation', 'No explanation provided')
+                        
+                        new_suggestions += f"""
+{i}. 🎯 {shortcut}
+   �� {explanation}
+"""
+                    
+                    new_suggestions += f"""
+
+💡 These suggestions are based on your actual usage patterns.
+   The more you use your computer, the better the AI recommendations become!
+                """
+                else:
+                    new_suggestions = """
+🤖 No Specific Patterns Detected
+
+The AI analyzed your behavior but didn't find clear patterns yet.
+
+💡 Keep using your computer normally - the AI will learn your habits and provide better suggestions over time!
+                """
             else:
+                # Fallback to basic statistics if AI fails
+                total_events = len(behavior_data)
+                unique_apps = len(set(event['app_name'] for event in behavior_data if event['app_name'] != 'Unknown'))
+                
                 new_suggestions = f"""
-🤖 Real-Time Analysis Generated!
+🤖 Basic Analysis (AI Unavailable)
 
-Based on your actual usage data since opening the app:
+Based on your recent activity:
 
-📊 Current Statistics:
+📊 Statistics:
 • Total Events: {total_events}
 • Applications Used: {unique_apps}
-• Potential Shortcuts: {missed_shortcuts}
 
-💡 Keep using your computer to see more personalized suggestions!
+💡 The AI analysis is currently unavailable. Try again later!
                 """
                 
         except Exception as e:
+            print(f"❌ Error generating AI suggestions: {e}")
             new_suggestions = f"""
 🤖 Analysis Error
 
-Could not analyze data: {e}
+Could not generate AI suggestions: {str(e)}
 
-💡 Make sure the database is working properly.
+💡 Make sure Ollama is running and try again.
         """
         
         self.suggestions_text.setPlainText(new_suggestions)
